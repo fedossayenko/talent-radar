@@ -19,6 +19,7 @@ COPY apps/api ./apps/api
 
 # Generate Prisma client
 WORKDIR /app/apps/api
+ENV PRISMA_CLI_BINARY_TARGETS="linux-musl-openssl-3.0.x"
 RUN npx prisma generate
 
 # Build the application
@@ -48,6 +49,10 @@ COPY --from=builder --chown=nestjs:nodejs /app/apps/api/package*.json ./
 # Copy Prisma schema and generated client
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/prisma ./prisma
 
+# Generate Prisma client with correct binary target for Alpine Linux
+ENV PRISMA_CLI_BINARY_TARGETS="linux-musl-openssl-3.0.x"
+RUN npx prisma generate
+
 # Create simple healthcheck script
 RUN echo 'const http = require("http"); \
 const options = { host: "localhost", port: 3000, path: "/api/v1/health", timeout: 2000 }; \
@@ -56,6 +61,9 @@ const req = http.request(options, (res) => { \
 }); \
 req.on("error", () => { process.exit(1); }); \
 req.end();' > healthcheck.js
+
+# Create logs directory and set permissions
+RUN mkdir -p logs && chown nestjs:nodejs logs
 
 # Set ownership and permissions
 RUN chown nestjs:nodejs healthcheck.js
