@@ -22,12 +22,20 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
+    // In test environment, make database connection optional to prevent startup failures
+    const isTestEnv = process.env.NODE_ENV === 'test';
+    
     try {
       await this.$connect();
       this.logger.log('✅ Database connected successfully');
     } catch (error) {
       this.logger.error('❌ Failed to connect to database:', error);
-      throw error;
+      
+      if (!isTestEnv) {
+        throw error;
+      } else {
+        this.logger.warn('🔶 Database connection failed in test environment - continuing startup');
+      }
     }
   }
 

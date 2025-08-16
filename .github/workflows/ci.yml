@@ -135,7 +135,7 @@ jobs:
 
       - name: Test Docker image
         run: |
-          docker run --rm -d --name test-api -p 3001:3000 \
+          docker run --rm -d --name test-api \
             --network host \
             -e DATABASE_URL="file:./test.db" \
             -e PORT=3000 \
@@ -143,5 +143,5 @@ jobs:
             -e REDIS_URL="redis://localhost:6379" \
             talent-radar-api:test
           sleep 20
-          curl -f http://localhost:3001/api/v1/health || exit 1
+          curl -f http://localhost:3000/api/v1/health || exit 1
           docker stop test-api
