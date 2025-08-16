@@ -19,7 +19,6 @@ COPY apps/api ./apps/api
 
 # Generate Prisma client
 WORKDIR /app/apps/api
-ENV PRISMA_CLI_BINARY_TARGETS="linux-musl-openssl-3.0.x"
 RUN npx prisma generate
 
 # Build the application
@@ -49,8 +48,7 @@ COPY --from=builder --chown=nestjs:nodejs /app/apps/api/package*.json ./
 # Copy Prisma schema and generated client
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/prisma ./prisma
 
-# Generate Prisma client with correct binary target for Alpine Linux
-ENV PRISMA_CLI_BINARY_TARGETS="linux-musl-openssl-3.0.x"
+# Generate Prisma client in production environment
 RUN npx prisma generate
 
 # Create simple healthcheck script
