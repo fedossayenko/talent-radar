@@ -3,24 +3,13 @@ import { NotFoundException } from '@nestjs/common';
 import { CompanyService } from './company.service';
 import { PrismaService } from '../../common/database/prisma.service';
 import { MockDataFactory } from '../../../test/test-utils/mock-data.factory';
+import { createMockPrismaService } from '../../../test/test-utils/prisma-mock.helper';
 
 describe('CompanyService', () => {
   let service: CompanyService;
   let prismaService: jest.Mocked<PrismaService>;
 
-  const mockPrismaService = {
-    company: {
-      count: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-    companyAnalysis: {
-      create: jest.fn(),
-    },
-  };
+  const mockPrismaService = createMockPrismaService();
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -34,7 +23,7 @@ describe('CompanyService', () => {
     }).compile();
 
     service = module.get<CompanyService>(CompanyService);
-    prismaService = module.get(PrismaService);
+    prismaService = module.get<jest.Mocked<PrismaService>>(PrismaService);
   });
 
   afterEach(() => {

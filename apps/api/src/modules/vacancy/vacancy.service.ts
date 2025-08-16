@@ -37,15 +37,16 @@ export class VacancyService {
       }
 
       if (technologies && technologies.length > 0) {
-        where.techStack = {
-          hasEvery: Array.isArray(technologies) ? technologies : [technologies],
+        where.requirements = {
+          contains: Array.isArray(technologies) ? technologies.join(',') : technologies,
+          mode: 'insensitive',
         };
       }
 
       if (location) {
         where.location = {
-          path: ['country'],
-          equals: location,
+          contains: location,
+          mode: 'insensitive',
         };
       }
 
@@ -54,19 +55,31 @@ export class VacancyService {
       }
 
       if (salaryMin || salaryMax) {
-        where.salary = {};
+        where.AND = where.AND || [];
         if (salaryMin) {
-          where.salary.path = ['min'];
-          where.salary.gte = salaryMin;
+          where.AND.push({ salaryMin: { gte: salaryMin } });
         }
         if (salaryMax) {
-          where.salary.path = ['max'];
-          where.salary.lte = salaryMax;
+          where.AND.push({ salaryMax: { lte: salaryMax } });
         }
       }
 
       // Get total count for pagination
       const total = await this.prisma.vacancy.count({ where });
+
+      // Build orderBy for sorting
+      let orderBy: any;
+      
+      if (sortBy === 'score') {
+        // Complex sorting for score requires array format
+        orderBy = [
+          { scores: { _count: order } },
+          { createdAt: 'desc' } // Secondary sort for deterministic order
+        ];
+      } else {
+        // Simple object format for other fields
+        orderBy = { [sortBy]: order };
+      }
 
       // Get vacancies with pagination
       const vacancies = await this.prisma.vacancy.findMany({
@@ -78,20 +91,11 @@ export class VacancyService {
               name: true,
               size: true,
               industry: true,
-              logoUrl: true,
-            },
-          },
-          source: {
-            select: {
-              id: true,
-              name: true,
-              type: true,
+              logo: true,
             },
           },
         },
-        orderBy: {
-          [sortBy]: order,
-        },
+        orderBy,
         skip: (page - 1) * limit,
         take: limit,
       });
@@ -112,6 +116,34 @@ export class VacancyService {
     }
   }
 
+  async create(createData: any) {
+    this.logger.log(`Creating vacancy with data:`, createData);
+
+    try {
+      const vacancy = await this.prisma.vacancy.create({
+        data: createData,
+        include: {
+          company: {
+            select: {
+              id: true,
+              name: true,
+              logo: true,
+            },
+          },
+        },
+      });
+
+      return {
+        success: true,
+        data: vacancy,
+        message: 'Vacancy created successfully',
+      };
+    } catch (error) {
+      this.logger.error('Failed to create vacancy:', error);
+      throw error;
+    }
+  }
+
   async findOne(id: string) {
     this.logger.log(`Finding vacancy with ID: ${id}`);
 
@@ -119,26 +151,17 @@ export class VacancyService {
       const vacancy = await this.prisma.vacancy.findUnique({
         where: { id },
         include: {
-          company: {
-            include: {
-              analyses: {
-                orderBy: { createdAt: 'desc' },
-                take: 1,
-              },
-            },
+          company: true,
+          scores: {
+            orderBy: { scoredAt: 'desc' },
           },
-          source: true,
-          duplicates: {
+          applications: {
+            orderBy: { appliedAt: 'desc' },
             include: {
-              duplicateVacancy: {
+              cv: {
                 select: {
                   id: true,
-                  title: true,
-                  company: {
-                    select: {
-                      name: true,
-                    },
-                  },
+                  filename: true,
                 },
               },
             },
@@ -171,8 +194,13 @@ export class VacancyService {
           updatedAt: new Date(),
         },
         include: {
-          company: true,
-          source: true,
+          company: {
+            select: {
+              id: true,
+              name: true,
+              logo: true,
+            },
+          },
         },
       });
 
@@ -196,6 +224,15 @@ export class VacancyService {
     this.logger.log(`Scoring vacancy ${id} with preferences:`, preferences);
 
     try {
+      // Check if vacancy exists first
+      const vacancy = await this.prisma.vacancy.findUnique({
+        where: { id },
+      });
+
+      if (!vacancy) {
+        throw new NotFoundException(`Vacancy with ID ${id} not found`);
+      }
+
       // Placeholder for scoring logic
       // This will be implemented with the AI service
       const mockScore = Math.random() * 100;
@@ -210,8 +247,6 @@ export class VacancyService {
       const updatedVacancy = await this.prisma.vacancy.update({
         where: { id },
         data: {
-          score: mockScore,
-          scoreBreakdown: mockBreakdown,
           updatedAt: new Date(),
         },
       });
@@ -247,20 +282,10 @@ export class VacancyService {
           where: { id: duplicateId },
           data: {
             status: 'duplicate',
-            duplicateOf: originalId,
             updatedAt: new Date(),
           },
         });
 
-        // Create the duplicate relationship record
-        await tx.vacancyDuplicate.create({
-          data: {
-            originalVacancyId: originalId,
-            duplicateVacancyId: duplicateId,
-            similarityScore: 95, // Placeholder - would be calculated by AI
-            detectionMethod: 'manual',
-          },
-        });
 
         return duplicateVacancy;
       });

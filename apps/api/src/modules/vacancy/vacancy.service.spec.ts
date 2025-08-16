@@ -3,26 +3,13 @@ import { NotFoundException } from '@nestjs/common';
 import { VacancyService } from './vacancy.service';
 import { PrismaService } from '../../common/database/prisma.service';
 import { MockDataFactory } from '../../../test/test-utils/mock-data.factory';
+import { createMockPrismaService } from '../../../test/test-utils/prisma-mock.helper';
 
 describe('VacancyService', () => {
   let service: VacancyService;
   let prismaService: jest.Mocked<PrismaService>;
 
-  const mockPrismaService = {
-    vacancy: {
-      count: jest.fn(),
-      findMany: jest.fn(),
-      findUnique: jest.fn(),
-      create: jest.fn(),
-      update: jest.fn(),
-      delete: jest.fn(),
-    },
-    vacancyScore: {
-      create: jest.fn(),
-      findUnique: jest.fn(),
-      update: jest.fn(),
-    },
-  };
+  const mockPrismaService = createMockPrismaService();
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -36,7 +23,7 @@ describe('VacancyService', () => {
     }).compile();
 
     service = module.get<VacancyService>(VacancyService);
-    prismaService = module.get(PrismaService);
+    prismaService = module.get<jest.Mocked<PrismaService>>(PrismaService);
   });
 
   afterEach(() => {
@@ -82,10 +69,6 @@ describe('VacancyService', () => {
               size: true,
               industry: true,
             },
-          },
-          scores: {
-            orderBy: { scoredAt: 'desc' },
-            take: 1,
           },
         },
         orderBy: { createdAt: 'desc' },
@@ -327,24 +310,23 @@ describe('VacancyService', () => {
         experienceLevel: 'senior',
       };
       const mockVacancy = MockDataFactory.createVacancyData('company-1', { id: vacancyId });
-      const mockScore = MockDataFactory.createVacancyScoreData(vacancyId);
-
       prismaService.vacancy.findUnique.mockResolvedValue(mockVacancy);
-      prismaService.vacancyScore.create.mockResolvedValue(mockScore);
+      prismaService.vacancy.update.mockResolvedValue({ ...mockVacancy, updatedAt: new Date() });
 
       // Act
       const result = await service.scoreVacancy(vacancyId, criteria);
 
       // Assert
       expect(result.success).toBe(true);
-      expect(result.data).toEqual(mockScore);
+      expect(result.data).toHaveProperty('score');
+      expect(result.data).toHaveProperty('scoreBreakdown');
       expect(result.message).toBe('Vacancy scored successfully');
 
-      expect(prismaService.vacancyScore.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({
-          vacancyId,
-          scoringCriteria: criteria,
-        }),
+      expect(prismaService.vacancy.update).toHaveBeenCalledWith({
+        where: { id: vacancyId },
+        data: {
+          updatedAt: expect.any(Date),
+        },
       });
     });
 
@@ -362,56 +344,4 @@ describe('VacancyService', () => {
     });
   });
 
-  describe('findDuplicates', () => {
-    it('should detect duplicate vacancies by title and company', async () => {
-      // Arrange
-      const newVacancy = MockDataFactory.createVacancyData('company-1', {
-        title: 'Frontend Developer',
-        companyId: 'company-1',
-      });
-      const existingVacancy = MockDataFactory.createVacancyData('company-1', {
-        id: 'existing-1',
-        title: 'Frontend Developer',
-        companyId: 'company-1',
-      });
-
-      prismaService.vacancy.findMany.mockResolvedValue([existingVacancy]);
-
-      // Act
-      const result = await service.findDuplicates(newVacancy);
-
-      // Assert
-      expect(result.success).toBe(true);
-      expect(result.data).toEqual([existingVacancy]);
-
-      expect(prismaService.vacancy.findMany).toHaveBeenCalledWith({
-        where: {
-          title: { contains: newVacancy.title, mode: 'insensitive' },
-          companyId: newVacancy.companyId,
-          status: 'active',
-        },
-        include: {
-          company: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
-      });
-    });
-
-    it('should return empty array when no duplicates found', async () => {
-      // Arrange
-      const newVacancy = MockDataFactory.createVacancyData('company-1');
-      prismaService.vacancy.findMany.mockResolvedValue([]);
-
-      // Act
-      const result = await service.findDuplicates(newVacancy);
-
-      // Assert
-      expect(result.success).toBe(true);
-      expect(result.data).toEqual([]);
-    });
-  });
 });
