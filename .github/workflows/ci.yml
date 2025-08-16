@@ -136,9 +136,11 @@ jobs:
       - name: Test Docker image
         run: |
           docker run --rm -d --name test-api -p 3001:3000 \
+            --network host \
             -e DATABASE_URL="file:./test.db" \
             -e PORT=3000 \
             -e NODE_ENV=test \
+            -e REDIS_URL="redis://localhost:6379" \
             -e PRISMA_QUERY_ENGINE_LIBRARY="/app/node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node" \
             talent-radar-api:test
           sleep 15
