@@ -2,9 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { DatabaseModule } from '../../src/common/database/database.module';
-import { RedisModule } from '../../src/common/redis/redis.module';
+import { RedisService } from '../../src/common/redis/redis.service';
 import { PrismaService } from '../../src/common/database/prisma.service';
 import { DatabaseHelper } from './database.helper';
+import { RedisMockService } from './redis-mock.service';
 
 @Module({
   imports: [
@@ -13,8 +14,14 @@ import { DatabaseHelper } from './database.helper';
       envFilePath: ['.env.test', '.env'],
     }),
     DatabaseModule,
-    RedisModule,
   ],
+  providers: [
+    {
+      provide: RedisService,
+      useClass: RedisMockService,
+    },
+  ],
+  exports: [RedisService],
 })
 export class TestModule {
   static async createTestingModule(imports: any[] = [], providers: any[] = []): Promise<TestingModule> {
