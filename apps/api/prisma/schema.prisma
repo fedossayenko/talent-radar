@@ -1,0 +1,144 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Company model
+model Company {
+  id          String   @id @default(cuid())
+  name        String
+  website     String?
+  description String?
+  industry    String?
+  size        String? // 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+
+  location    String?
+  logo        String?
+  founded     Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  analyses  CompanyAnalysis[]
+  vacancies Vacancy[]
+
+  @@map("companies")
+}
+
+// Company Analysis model
+model CompanyAnalysis {
+  id                     String   @id @default(cuid())
+  companyId              String
+  cultureScore           Float?
+  retentionRate          Float?
+  hiringProcess          String?  // JSON string of process steps
+  techStack              String?  // JSON string of technologies
+  workLifeBalance        Float?
+  careerGrowth           Float?
+  salaryCompetitiveness  Float?
+  benefitsScore          Float?
+  analysisSource         String   @default("ai_generated")
+  confidenceScore        Float?
+  rawData                String?  // JSON string of raw analysis data
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@map("company_analyses")
+}
+
+// Vacancy model
+model Vacancy {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  requirements    String?  // JSON string of requirements array
+  location        String?
+  salaryMin       Int?     // Use Int for currency (in cents)
+  salaryMax       Int?
+  experienceLevel String?  // junior, mid, senior, lead, principal
+  employmentType  String?  // full-time, part-time, contract, internship
+  companyId       String
+  sourceUrl       String?
+  sourceSite      String?
+  status          String   @default("active") // active, inactive, filled, draft
+  postedAt        DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  company      Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  scores       VacancyScore[]
+  applications Application[]
+
+  @@map("vacancies")
+}
+
+// Vacancy Score model
+model VacancyScore {
+  id                    String   @id @default(cuid())
+  vacancyId             String
+  overallScore          Float?
+  salaryScore           Float?
+  locationScore         Float?
+  companyScore          Float?
+  roleScore             Float?
+  techStackScore        Float?
+  workLifeBalanceScore  Float?
+  careerGrowthScore     Float?
+  scoringCriteria       String?  // JSON string of criteria and weights
+  scoredAt              DateTime @default(now())
+
+  // Relations
+  vacancy Vacancy @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+
+  @@map("vacancy_scores")
+}
+
+// CV model
+model CV {
+  id            String   @id @default(cuid())
+  filename      String
+  originalName  String
+  mimeType      String
+  size          Int
+  path          String
+  extractedText String?
+  skills        String?  // JSON string of skills array
+  experience    Int?     // Years of experience
+  education     String?  // JSON string of education array
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  applications Application[]
+
+  @@map("cvs")
+}
+
+// Application model
+model Application {
+  id          String   @id @default(cuid())
+  vacancyId   String
+  cvId        String?
+  status      String   @default("draft") // draft, applied, interview, rejected, offered, accepted, withdrawn
+  appliedAt   DateTime?
+  coverLetter String?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  vacancy Vacancy @relation(fields: [vacancyId], references: [id])
+  cv      CV?     @relation(fields: [cvId], references: [id])
+
+  @@map("applications")
+}

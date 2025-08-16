@@ -196,8 +196,8 @@ export class CompanyService {
       const mockAnalysis = {
         cultureScore: Math.random() * 10,
         retentionRate: Math.random() * 100,
-        hiringProcess: ['Application Review', 'Technical Interview', 'Cultural Fit Interview', 'Offer'],
-        techStack: ['JavaScript', 'TypeScript', 'React', 'Node.js'],
+        hiringProcess: JSON.stringify(['Application Review', 'Technical Interview', 'Cultural Fit Interview', 'Offer']),
+        techStack: JSON.stringify(['JavaScript', 'TypeScript', 'React', 'Node.js']),
         workLifeBalance: Math.random() * 10,
         careerGrowth: Math.random() * 10,
         salaryCompetitiveness: Math.random() * 10,
@@ -210,7 +210,7 @@ export class CompanyService {
           ...mockAnalysis,
           analysisSource: 'ai_generated',
           confidenceScore: 0.8,
-          rawData: mockAnalysis,
+          rawData: JSON.stringify(mockAnalysis),
         },
       });
 
