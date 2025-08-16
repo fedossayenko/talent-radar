@@ -6,7 +6,7 @@
   "private": true,
   "license": "MIT",
   "scripts": {
-    "build": "nest build",
+    "build": "nest build --config tsconfig.build.json",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -19,7 +19,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsc --noEmit --project tsconfig.build.json",
     "db:generate": "npx prisma generate",
     "db:migrate": "npx prisma migrate dev",
     "db:studio": "npx prisma studio",
@@ -97,14 +97,7 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": ["ts-jest", {
-        "isolatedModules": true,
-        "tsconfig": {
-          "skipLibCheck": true,
-          "strictNullChecks": false,
-          "noImplicitAny": false
-        }
-      }]
+      "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s",

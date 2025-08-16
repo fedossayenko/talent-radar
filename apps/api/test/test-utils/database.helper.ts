@@ -20,6 +20,7 @@ export class DatabaseHelper {
       try {
         execSync('npx prisma db push --force-reset', { stdio: 'inherit' });
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.warn('Migration warning:', error);
       }
     }

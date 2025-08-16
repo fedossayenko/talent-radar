@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { CompanyController } from './company.controller';
@@ -46,10 +46,10 @@ describe('CompanyController (e2e)', () => {
     it('should return paginated list of companies', async () => {
       // Arrange: Create test companies
       const prisma = DatabaseHelper.getPrismaClient();
-      const company1 = await prisma.company.create({
+      await prisma.company.create({
         data: MockDataFactory.createCompanyData({ name: 'Alpha Corp' }),
       });
-      const company2 = await prisma.company.create({
+      await prisma.company.create({
         data: MockDataFactory.createCompanyData({ name: 'Beta Inc' }),
       });
 
