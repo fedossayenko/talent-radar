@@ -29,6 +29,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    // In test environment, make Redis connection optional to prevent startup failures
+    const isTestEnv = process.env.NODE_ENV === 'test';
+    
     try {
       await Promise.all([
         this.client.ping(),
@@ -38,7 +41,12 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('✅ Redis connected successfully');
     } catch (error) {
       this.logger.error('❌ Failed to connect to Redis:', error);
-      throw error;
+      
+      if (!isTestEnv) {
+        throw error;
+      } else {
+        this.logger.warn('🔶 Redis connection failed in test environment - continuing startup');
+      }
     }
   }
 

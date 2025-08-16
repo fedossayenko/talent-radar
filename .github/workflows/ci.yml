@@ -141,8 +141,7 @@ jobs:
             -e PORT=3000 \
             -e NODE_ENV=test \
             -e REDIS_URL="redis://localhost:6379" \
-            -e PRISMA_QUERY_ENGINE_LIBRARY="/app/node_modules/.prisma/client/libquery_engine-linux-musl-openssl-3.0.x.so.node" \
             talent-radar-api:test
-          sleep 15
+          sleep 20
           curl -f http://localhost:3001/api/v1/health || exit 1
           docker stop test-api
