@@ -68,28 +68,7 @@ jobs:
           DATABASE_URL: file:./test/tmp/ci-test.db
 
       - name: Lint code
-        id: lint
-        run: |
-          # Run linting and capture exit code
-          if bun run lint > lint_output.log 2>&1; then
-            echo "lint_passed=true" >> $GITHUB_OUTPUT
-            echo "lint_errors=" >> $GITHUB_OUTPUT
-            echo "✅ Linting passed - no errors found"
-          else
-            echo "lint_passed=false" >> $GITHUB_OUTPUT
-            echo "❌ Linting failed - capturing errors"
-            
-            # Only capture actual error lines, filter out noise
-            grep -E '(error|Error|ERROR|warning|Warning|WARNING)' lint_output.log > lint_errors.log || echo "No specific error patterns found, using full output" > lint_errors.log && cat lint_output.log > lint_errors.log
-            
-            echo "lint_errors<<EOF" >> $GITHUB_OUTPUT
-            cat lint_errors.log >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            
-            echo "--- Captured Lint Errors ---"
-            cat lint_errors.log
-            echo "---------------------------"
-          fi
+        run: bun run lint
 
       - name: Type check
         run: bun run type-check

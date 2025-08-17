@@ -25,137 +25,29 @@ jobs:
           echo "$DIFF" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Call Gemini API for Review
-        id: gemini_review
-        run: |
-          # Write prompt to a temporary file to handle complex content
-          cat > prompt.txt << 'EOF'
-          You are an AI code reviewer. Your task is to analyze the provided git diff and identify only the most severe issues.
-
-          **Instructions:**
-          1.  **Focus only on `critical` and `high` severity suggestions.** Do not report medium or low-severity issues like style conventions or minor nitpicks.
-          2.  **You MUST use one of the following severity levels for your findings:**
-              *   `critical`: A potential bug, security vulnerability, or major performance issue.
-              *   `high`: A major design or architectural issue.
-          3.  **Provide context.** For each suggestion, specify the file and line number if possible.
-          4.  **Be concise.** Keep your suggestions and reasoning brief and to the point.
-          5.  **If you find no critical or high issues, you MUST respond with the single phrase `No critical or high severity issues found.`**
-
-          ${{ steps.get_diff.outputs.diff }}
-          EOF
-          
-          # Use Google's generative AI CLI tool
-          echo "🚀 Installing Google AI CLI..."
-          npm install -g @google-ai/generativelanguage@latest
-          
-          # Alternative: Use curl to call Gemini API directly
-          echo "🔍 Running Gemini analysis via API..."
-          
-          # Set API key as environment variable
-          export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
-          
-          # Properly escape content for JSON using jq or node
-          if command -v jq >/dev/null 2>&1; then
-            # Use jq to properly escape JSON
-            PROMPT_CONTENT=$(cat prompt.txt)
-            echo '{"contents":[{"parts":[{"text":""}]}]}' | jq --arg text "$PROMPT_CONTENT" '.contents[0].parts[0].text = $text' > request.json
-          else
-            # Fallback: Use node.js for JSON escaping (create script file first)
-            echo "const fs = require('fs');" > json_creator.js
-            echo "const content = fs.readFileSync('prompt.txt', 'utf8');" >> json_creator.js
-            echo "const payload = {contents: [{parts: [{text: content}]}]};" >> json_creator.js
-            echo "fs.writeFileSync('request.json', JSON.stringify(payload));" >> json_creator.js
-            node json_creator.js
-            rm json_creator.js
-          fi
-          
-          # Call Gemini API directly using curl
-          if curl -s -H "Content-Type: application/json" \
-               -H "x-goog-api-key: ${GEMINI_API_KEY}" \
-               -d @request.json \
-               "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent" \
-               > api_response.json 2>&1; then
+      - name: AI Code Review
+        uses: google-github-actions/github-ai-code-review@v1
+        id: ai_review
+        with:
+          model: 'gemini-1.5-flash-latest'
+          api_key: ${{ secrets.GEMINI_API_KEY }}
+          diff: ${{ steps.get_diff.outputs.diff }}
+          prompt: |
+            You are an AI code reviewer. Focus only on critical and high severity issues.
             
-            # Extract text from API response
-            if command -v jq >/dev/null 2>&1; then
-              jq -r '.candidates[0].content.parts[0].text // "No response content"' api_response.json > gemini_response.txt
-            else
-              # Fallback without jq - basic text extraction
-              grep -o '"text"[^}]*' api_response.json | sed 's/"text"[[:space:]]*:[[:space:]]*"//' | sed 's/"[[:space:]]*$//' > gemini_response.txt || echo "Failed to parse response" > gemini_response.txt
-            fi
-            echo "✅ Gemini CLI completed successfully"
-          else
-            echo "❌ Gemini CLI failed with exit code $?"
-            echo "Error output:"
-            cat gemini_response.txt
-          fi
-          
-          # Debug: Show raw response file content
-          echo "📄 Raw response file size: $(wc -c < gemini_response.txt) bytes"
-          echo "📄 Raw response content:"
-          cat gemini_response.txt
-          echo "📄 End of raw response"
-          
-          # Read the response and set output
-          GEMINI_RESPONSE=$(cat gemini_response.txt)
-          echo "📝 Setting output variable with ${#GEMINI_RESPONSE} characters"
-          
-          echo "gemini-response<<EOF" >> $GITHUB_OUTPUT
-          echo "$GEMINI_RESPONSE" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          
-          # Clean up
-          rm -f prompt.txt gemini_response.txt
-
-      - name: Debug Gemini Response
-        id: debug_response
-        env:
-          RESPONSE: ${{ steps.gemini_review.outputs.gemini-response }}
-        run: |
-          echo "🔍 Debugging Gemini Response Output"
-          echo "=================================="
-          echo "Response length: ${#RESPONSE} characters"
-          echo "Response preview (first 200 chars):"
-          echo "${RESPONSE:0:200}"
-          if [[ ${#RESPONSE} -gt 200 ]]; then
-            echo "... (truncated, total ${#RESPONSE} characters)"
-          fi
-          echo "=================================="
-          
-          # Check if response is empty or contains only whitespace
-          if [[ -z "${RESPONSE// }" ]]; then
-            echo "⚠️  WARNING: Gemini response is empty!"
-            echo "response_status=empty" >> $GITHUB_OUTPUT
-          else
-            echo "✅ Gemini response contains content (${#RESPONSE} characters)"
-            echo "response_status=valid" >> $GITHUB_OUTPUT
-          fi
+            Instructions:
+            1. Report only critical (bugs, security, performance) and high (design/architecture) issues
+            2. Provide file and line context
+            3. Be concise and actionable
+            4. If no issues found, respond: "No critical or high severity issues found."
+          max_tokens: 2048
 
       - name: Post Review Comment
-        if: steps.gemini_review.outputs.gemini-response != 'No critical or high severity issues found.' && steps.debug_response.outputs.response_status == 'valid'
-        uses: marocchino/sticky-pull-request-comment@v2
-        env:
-          GEMINI_RESPONSE: ${{ steps.gemini_review.outputs.gemini-response }}
-        with:
-          header: gemini-review
-          message: |
-            ### ✨ AI Review ✨
-            
-            ${{ env.GEMINI_RESPONSE }}
-
-      - name: Post Fallback Comment
-        if: steps.gemini_review.outputs.gemini-response != 'No critical or high severity issues found.' && steps.debug_response.outputs.response_status == 'empty'
+        if: steps.ai_review.outputs.response != 'No critical or high severity issues found.'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          header: gemini-review
+          header: ai-review
           message: |
-            ### ⚠️ AI Review - Response Issue ⚠️
+            ### ✨ AI Code Review ✨
             
-            The AI reviewer attempted to analyze this PR but the response was empty or malformed. 
-            
-            Please check the workflow logs for details. This may indicate:
-            - Complex markdown content causing YAML parsing issues
-            - API response timeout or formatting problems
-            - Output variable scoping issues
-            
-            **Action Required**: Manual code review recommended for this PR.
+            ${{ steps.ai_review.outputs.response }}
