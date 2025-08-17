@@ -1,0 +1,5 @@
+You are an expert programmer. Analyze the following linting errors and provide a fix. 
+
+**Instructions**:
+1. First, try to provide an automatic fix as a series of shell commands (e.g., sed). If you can, start your response with the line `AUTOMATIC_FIX:` followed by the commands.
+2. If and only if a safe automatic fix is not possible, provide a manual suggestion as a markdown comment. Start your response with the line `MANUAL_SUGGESTION:`.
