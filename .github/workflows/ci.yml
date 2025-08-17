@@ -191,8 +191,9 @@ jobs:
       - name: Handle Gemini Response
         id: handle_gemini_response
         if: steps.lint.outputs.lint_passed == 'false'
+        env:
+          RESPONSE: ${{ steps.ai_lint_triage.outputs.gemini-response }}
         run: |
-          RESPONSE="${{ steps.ai_lint_triage.outputs.gemini-response }}"
           
           # 🔍 Enhanced Debug: Check response details
           echo "═══ DEBUGGING GEMINI RESPONSE ═══"
