@@ -69,7 +69,6 @@ jobs:
 
       - name: Lint code
         id: lint
-        continue-on-error: true
         run: |
           # Run linting and capture exit code
           if bun run lint > lint_output.log 2>&1; then
