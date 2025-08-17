@@ -74,7 +74,10 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           LINT_ERRORS=$(cat lint_errors.log)
-          PROMPT="You are an expert programmer. Analyze the following linting errors and provide a fix. **Instructions**: 1. First, try to provide an automatic fix as a series of shell commands (e.g., sed). If you can, start your response with the line `AUTOMATIC_FIX:`. 2. If and only if a safe automatic fix is not possible, provide a manual suggestion as a markdown comment. Start your response with the line `MANUAL_SUGGESTION:`. \n\n**Errors**:\n$LINT_ERRORS"
+          PROMPT="You are an expert programmer. Analyze the following linting errors and provide a fix. **Instructions**: 1. First, try to provide an automatic fix as a series of shell commands (e.g., sed). If you can, start your response with the line `AUTOMATIC_FIX:`. 2. If and only if a safe automatic fix is not possible, provide a manual suggestion as a markdown comment. Start your response with the line `MANUAL_SUGGESTION:`. 
+
+**Errors**:
+$LINT_ERRORS"
           
           API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
@@ -164,91 +167,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run security audit
-        id: bun_audit
-        continue-on-error: true
-        run: bun audit > bun_audit.log 2>&1
-
-      - name: Run dependency review
-        id: dep_review
-        continue-on-error: true
-        run: actions/dependency-review-action@v4 > dep_review.log 2>&1
-
-      - name: Triage and Fix Security Issues
-        id: ai_security_triage
-        if: steps.bun_audit.outcome == 'failure' || steps.dep_review.outcome == 'failure'
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          BUN_AUDIT_LOG="bun_audit.log"
-          DEP_REVIEW_LOG="dep_review.log"
-
-          # Triage: Check for the specific configuration error first.
-          if grep -q "Dependency review is not supported" "$DEP_REVIEW_LOG"; then
-            echo "Detected configuration error. Asking AI for explanation..."
-            PROMPT="The 'Dependency Review' GitHub Action failed with the following error. Analyze it and write a user-friendly comment for the pull request explaining the problem and how to fix it in the repository settings. Provide a direct link to the settings page. Start the comment with '### Dependency Review Configuration Error'. Error log: $(cat $DEP_REVIEW_LOG)"
-            API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
-            JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
-            COMMENT_BODY=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL" | jq -r '.candidates[0].content.parts[0].text')
-            
-            echo "fix_type=notification" >> $GITHUB_OUTPUT
-            echo "comment_body<<EOF" >> $GITHUB_OUTPUT
-            echo "$COMMENT_BODY" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-
-          # If not a config error, proceed with vulnerability fixing.
-          else
-            echo "Detected vulnerabilities. Asking AI for code fix..."
-            PROMPT="You are a cybersecurity expert. Analyze the following security reports. **Instructions**: 1. First, try to provide an automatic fix as a series of 'bun update <package>' commands. If you can, start your response with the line `AUTOMATIC_FIX:`. 2. If and only if a safe automatic fix is not possible, provide a manual suggestion as a markdown comment. Start your response with the line `MANUAL_SUGGESTION:`.
-
-**BUN AUDIT REPORT**:
-$(cat $BUN_AUDIT_LOG)
-
-**DEPENDENCY REVIEW REPORT**:
-$(cat $DEP_REVIEW_LOG)"
-            API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
-            JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
-            RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL" | jq -r '.candidates[0].content.parts[0].text')
-
-            if [[ $(echo "$RESPONSE" | head -n 1) == "AUTOMATIC_FIX:" ]]; then
-              echo "AI provided an automatic fix."
-              FIX_COMMANDS=$(echo "$RESPONSE" | tail -n +2)
-              eval "$FIX_COMMANDS"
-              echo "fix_type=code" >> $GITHUB_OUTPUT
-            elif [[ $(echo "$RESPONSE" | head -n 1) == "MANUAL_SUGGESTION:" ]]; then
-              echo "AI provided a manual suggestion."
-              COMMENT_BODY=$(echo "$RESPONSE" | tail -n +2)
-              echo "fix_type=notification" >> $GITHUB_OUTPUT
-              echo "comment_body<<EOF" >> $GITHUB_OUTPUT
-              echo "$COMMENT_BODY" >> $GITHUB_OUTPUT
-              echo "EOF" >> $GITHUB_OUTPUT
-            else
-              echo "AI returned an unexpected response format."
-              exit 1
-            fi
-          fi
-
-      - name: Post Security Fix Suggestion
-        if: steps.ai_security_triage.outputs.fix_type == 'notification'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: ai-security-suggestion
-          message: ${{ steps.ai_security_triage.outputs.comment_body }}
-
-      - name: Verify and Commit Security Code Fix
-        if: steps.ai_security_triage.outputs.fix_type == 'code'
-        run: |
-          echo "Verifying AI fix by re-running security audit..."
-          if ! bun audit; then
-            echo "AI fix did not resolve bun audit issues. Failing workflow."
-            exit 1
-          fi
-          
-          echo "Security issues fixed successfully. Committing changes..."
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add bun.lockb
-          git commit -m "chore(ci): apply automatic security audit fixes"
-          git push
+        run: bun audit
 
       - name: Run dependency review
         uses: actions/dependency-review-action@v4
