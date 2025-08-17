@@ -48,7 +48,8 @@ TalentRadar is a comprehensive job tracking application designed to help IT deve
 ## Quick Start
 
 ### Prerequisites
-- Node.js 18+
+- Node.js 22+
+- Bun 1.0+
 - PostgreSQL 14+
 - Redis 6+
 
@@ -60,26 +61,26 @@ git clone <repository-url>
 cd talent-radar
 
 # Install dependencies
-npm install
+bun install
 
 # Set up environment variables
 cp .env.example .env
 # Edit .env with your configuration
 
 # Start development environment
-npm run dev
+bun run dev
 ```
 
 ### Development
 
 ```bash
 # Start all services
-npm run dev
+bun run dev
 
 # Start individual services
-npm run dev:api      # Backend API
-npm run dev:web      # Frontend
-npm run dev:scraper  # Background scraper
+bun run dev:api      # Backend API
+bun run dev:web      # Frontend
+bun run dev:scraper  # Background scraper
 ```
 
 ## Architecture
@@ -146,7 +147,7 @@ The API documentation is available at `/api/docs` when running in development mo
 
 ```bash
 # Build for production
-npm run build
+bun run build
 
 # Deploy to Railway
 railway deploy

@@ -5,6 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+bun-debug.log*
 
 # Runtime data
 pids
@@ -41,8 +42,9 @@ typings/
 # TypeScript cache
 *.tsbuildinfo
 
-# Optional npm cache directory
+# Optional package manager cache directories
 .npm
+.bun
 
 # Optional eslint cache
 .eslintcache
@@ -166,9 +168,11 @@ scraped-data/
 *.backup
 *.bak
 
-# Lock files (keep package-lock.json for consistency)
-# yarn.lock
-# pnpm-lock.yaml
+# Lock files (using bun.lockb, ignore others)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+# Keep bun.lockb for consistency
 
 # Generated files
 schema.prisma.backup
