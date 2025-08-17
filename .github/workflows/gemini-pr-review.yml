@@ -44,13 +44,41 @@ jobs:
           ${{ steps.get_diff.outputs.diff }}
           EOF
           
-          # Install and run Gemini CLI directly
-          echo "🚀 Installing Gemini CLI..."
-          npm install -g @google/gemini-cli@latest
+          # Use Google's generative AI CLI tool
+          echo "🚀 Installing Google AI CLI..."
+          npm install -g @google-ai/generativelanguage@latest
           
-          # Run Gemini and capture output with error handling
-          echo "🔍 Running Gemini analysis..."
-          if gemini-cli --api-key="${{ secrets.GEMINI_API_KEY }}" --prompt="$(cat prompt.txt)" > gemini_response.txt 2>&1; then
+          # Alternative: Use curl to call Gemini API directly
+          echo "🔍 Running Gemini analysis via API..."
+          
+          # Set API key as environment variable
+          export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+          
+          # Create request payload
+          cat > request.json << 'EOL'
+{
+  "contents": [{
+    "parts": [{
+      "text": "$(cat prompt.txt | sed 's/"/\\"/g' | tr '\n' ' ')"
+    }]
+  }]
+}
+EOL
+          
+          # Call Gemini API directly using curl
+          if curl -s -H "Content-Type: application/json" \
+               -H "x-goog-api-key: ${GEMINI_API_KEY}" \
+               -d @request.json \
+               "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent" \
+               > api_response.json 2>&1; then
+            
+            # Extract text from API response
+            if command -v jq >/dev/null 2>&1; then
+              jq -r '.candidates[0].content.parts[0].text // "No response content"' api_response.json > gemini_response.txt
+            else
+              # Fallback without jq - basic text extraction
+              grep -o '"text"[^}]*' api_response.json | sed 's/"text"[[:space:]]*:[[:space:]]*"//' | sed 's/"[[:space:]]*$//' > gemini_response.txt || echo "Failed to parse response" > gemini_response.txt
+            fi
             echo "✅ Gemini CLI completed successfully"
           else
             echo "❌ Gemini CLI failed with exit code $?"

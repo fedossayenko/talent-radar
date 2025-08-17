@@ -90,57 +90,126 @@ jobs:
       - name: Triage and Fix Lint Errors
         if: steps.lint.outputs.lint_passed == 'false'
         id: ai_lint_triage
-        uses: google-github-actions/run-gemini-cli@main
-        with:
-          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          prompt: |
-            You are an expert programmer. Analyze the following linting errors and provide a fix.
+        run: |
+          echo "🔍 Calling Gemini API for lint error analysis..."
+          
+          # Create the prompt file
+          cat > lint_prompt.txt << 'EOF'
+          You are an expert programmer. Analyze the following linting errors and provide a fix.
 
-            **CRITICAL FORMATTING REQUIREMENTS**:
-            - Your response MUST start with either `AUTOMATIC_FIX:` or `MANUAL_SUGGESTION:` on its own line
-            - Do NOT include any explanatory text before these keywords
-            - These keywords are case-sensitive and must be followed by a colon
+          **CRITICAL FORMATTING REQUIREMENTS**:
+          - Your response MUST start with either `AUTOMATIC_FIX:` or `MANUAL_SUGGESTION:` on its own line
+          - Do NOT include any explanatory text before these keywords
+          - These keywords are case-sensitive and must be followed by a colon
 
-            **Instructions**:
-            1. If you can provide a safe automatic fix using shell commands (sed, find, etc.), start your response with:
-               ```
-               AUTOMATIC_FIX:
-               your shell commands here
-               ```
+          **Instructions**:
+          1. If you can provide a safe automatic fix using shell commands (sed, find, etc.), start your response with:
+             ```
+             AUTOMATIC_FIX:
+             your shell commands here
+             ```
 
-            2. If automatic fixing is not safe or possible, start your response with:
-               ```
-               MANUAL_SUGGESTION:
-               your markdown suggestion here
-               ```
+          2. If automatic fixing is not safe or possible, start your response with:
+             ```
+             MANUAL_SUGGESTION:
+             your markdown suggestion here
+             ```
 
-            **Examples**:
-            ✅ Good response:
-            ```
-            AUTOMATIC_FIX:
-            sed -i 's/var /const /g' src/*.js
-            ```
+          **Examples**:
+          ✅ Good response:
+          ```
+          AUTOMATIC_FIX:
+          sed -i 's/var /const /g' src/*.js
+          ```
 
-            ❌ Bad response:
-            ```
-            I can help you fix these linting errors.
+          ❌ Bad response:
+          ```
+          I can help you fix these linting errors.
+          
+          AUTOMATIC_FIX:
+          sed -i 's/var /const /g' src/*.js
+          ```
+
+          **Linting Errors to Fix**:
+          ${{ steps.lint.outputs.lint_errors }}
+          EOF
+          
+          # Set API key
+          export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
+          
+          # Create request payload (escape quotes properly)
+          PROMPT_CONTENT=$(cat lint_prompt.txt | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
+          
+          cat > api_request.json << EOF
+{
+  "contents": [{
+    "parts": [{
+      "text": "$PROMPT_CONTENT"
+    }]
+  }]
+}
+EOF
+          
+          echo "📤 Sending request to Gemini API..."
+          
+          # Call Gemini API
+          if curl -s -H "Content-Type: application/json" \
+               -H "x-goog-api-key: ${GEMINI_API_KEY}" \
+               -d @api_request.json \
+               "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent" \
+               > gemini_api_response.json 2>&1; then
             
-            AUTOMATIC_FIX:
-            sed -i 's/var /const /g' src/*.js
-            ```
-
-            **Linting Errors to Fix**:
-            ${{ steps.lint.outputs.lint_errors }}
+            echo "✅ Gemini API call successful"
+            
+            # Extract response text
+            if command -v jq >/dev/null 2>&1; then
+              GEMINI_RESPONSE=$(jq -r '.candidates[0].content.parts[0].text // "No response content"' gemini_api_response.json)
+            else
+              # Fallback without jq
+              GEMINI_RESPONSE=$(grep -o '"text"[^}]*' gemini_api_response.json | head -1 | sed 's/"text"[[:space:]]*:[[:space:]]*"//' | sed 's/"[[:space:]]*$//' || echo "Failed to parse response")
+            fi
+            
+            echo "📝 Raw Gemini Response (first 500 chars):"
+            echo "${GEMINI_RESPONSE:0:500}"
+            
+            # Set output for next step
+            echo "gemini-response<<EOF" >> $GITHUB_OUTPUT
+            echo "$GEMINI_RESPONSE" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+          else
+            echo "❌ Gemini API call failed"
+            cat gemini_api_response.json
+            echo "gemini-response=API call failed" >> $GITHUB_OUTPUT
+          fi
+          
+          # Clean up
+          rm -f lint_prompt.txt api_request.json gemini_api_response.json
 
       - name: Handle Gemini Response
         id: handle_gemini_response
         if: steps.lint.outputs.lint_passed == 'false'
         run: |
           RESPONSE="${{ steps.ai_lint_triage.outputs.gemini-response }}"
-          # 🔍 Debug: Always log the raw response
+          
+          # 🔍 Enhanced Debug: Check response details
+          echo "═══ DEBUGGING GEMINI RESPONSE ═══"
+          echo "Response variable length: ${#RESPONSE}"
+          echo "Response variable set: $([ -n "$RESPONSE" ] && echo "YES" || echo "NO")"
+          echo "Response first 100 chars: ${RESPONSE:0:100}"
           echo "═══ Full Gemini AI Response ═══"
           echo "$RESPONSE"
           echo "═══════════════════════════════"
+          
+          # Additional debug: Check if response is actually empty
+          if [ -z "$RESPONSE" ]; then
+            echo "🚨 ERROR: Response is completely empty!"
+            echo "Available step outputs:"
+            echo "- lint_passed: ${{ steps.lint.outputs.lint_passed }}"
+            echo "- lint_errors: ${{ steps.lint.outputs.lint_errors }}"
+            echo "Checking if ai_lint_triage step actually ran..."
+            exit 1
+          fi
           
           # 🔧 Robust parsing with pattern matching
           if echo "$RESPONSE" | grep -iq "AUTOMATIC_FIX:"; then
