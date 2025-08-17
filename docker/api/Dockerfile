@@ -1,6 +1,6 @@
 # TalentRadar API Dockerfile
 
-FROM node:18-alpine AS base
+FROM oven/bun:1.0-alpine AS base
 
 # Install system dependencies
 RUN apk add --no-cache \
@@ -32,7 +32,7 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Development stage
 FROM base AS development
-RUN npm ci
+RUN bun install
 COPY . .
 EXPOSE 3001
 
@@ -40,7 +40,7 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3001/health || exit 1
 
-CMD ["npm", "run", "start:dev", "--workspace=apps/api"]
+CMD ["bun", "run", "start:dev"]
 
 # Build stage
 FROM base AS builder
