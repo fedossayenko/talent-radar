@@ -26,28 +26,27 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: AI Code Review
-        uses: google-github-actions/github-ai-code-review@v1
+        uses: freeedcom/ai-codereviewer@v1
         id: ai_review
         with:
-          model: 'gemini-1.5-flash-latest'
-          api_key: ${{ secrets.GEMINI_API_KEY }}
-          diff: ${{ steps.get_diff.outputs.diff }}
-          prompt: |
-            You are an AI code reviewer. Focus only on critical and high severity issues.
-            
-            Instructions:
-            1. Report only critical (bugs, security, performance) and high (design/architecture) issues
-            2. Provide file and line context
-            3. Be concise and actionable
-            4. If no issues found, respond: "No critical or high severity issues found."
-          max_tokens: 2048
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          model: "gemini-1.5-flash"
+          review_style: "focused"
+          exclude_files: "*.md,*.json"
+          custom_prompt: |
+            Focus only on critical and high severity issues:
+            - Critical: bugs, security vulnerabilities, performance issues
+            - High: major design or architectural issues
+            Provide file and line context. Be concise and actionable.
+            If no issues found, respond: "No critical or high severity issues found."
 
       - name: Post Review Comment
-        if: steps.ai_review.outputs.response != 'No critical or high severity issues found.'
+        if: steps.ai_review.outputs.review-result != 'No critical or high severity issues found.'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: ai-review
           message: |
             ### ✨ AI Code Review ✨
             
-            ${{ steps.ai_review.outputs.response }}
+            ${{ steps.ai_review.outputs.review-result }}
