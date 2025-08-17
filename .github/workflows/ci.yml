@@ -76,7 +76,7 @@ jobs:
           NODE_ENV: test
 
       - name: Run E2E tests
-        run: bun run test:e2e --filter=apps/api
+        run: bun run test:e2e
         env:
           DATABASE_URL: file:./test/tmp/ci-test.db
           REDIS_URL: redis://localhost:6379

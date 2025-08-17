@@ -5,6 +5,9 @@ import { DevBgScraper } from './scrapers/dev-bg.scraper';
 import { ScraperProcessor } from './processors/scraper.processor';
 import { ScraperScheduler } from './scraper.scheduler';
 import { ScraperController } from './scraper.controller';
+import { TranslationService } from './services/translation.service';
+import { JobParserService } from './services/job-parser.service';
+import { TechPatternService } from './services/tech-pattern.service';
 import { VacancyModule } from '../vacancy/vacancy.module';
 import { CompanyModule } from '../company/company.module';
 import { DatabaseModule } from '../../common/database/database.module';
@@ -33,6 +36,9 @@ import { DatabaseModule } from '../../common/database/database.module';
     DevBgScraper,
     ScraperProcessor,
     ScraperScheduler,
+    TranslationService,
+    JobParserService,
+    TechPatternService,
   ],
   exports: [ScraperService, ScraperScheduler],
 })

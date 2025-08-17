@@ -20,6 +20,7 @@
     "start:web": "echo 'Web app not implemented yet'",
     "test": "bun run test:api",
     "test:api": "cd apps/api && bun run test",
+    "test:e2e": "cd apps/api && bun run test:e2e",
     "test:web": "echo 'Web app not implemented yet'",
     "lint": "bun run lint:api",
     "lint:api": "cd apps/api && bun run lint",
