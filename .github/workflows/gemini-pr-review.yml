@@ -54,15 +54,29 @@ jobs:
           # Set API key as environment variable
           export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
           
-          # Create request payload using echo commands to avoid quoting issues
-          PROMPT_CONTENT=$(cat prompt.txt | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
-          echo "{" > request.json
-          echo '  "contents": [{' >> request.json
-          echo '    "parts": [{' >> request.json
-          echo "      \"text\": \"$PROMPT_CONTENT\"" >> request.json
-          echo '    }]' >> request.json
-          echo '  }]' >> request.json
-          echo "}" >> request.json
+          # Properly escape content for JSON using jq or python
+          if command -v jq >/dev/null 2>&1; then
+            # Use jq to properly escape JSON
+            PROMPT_CONTENT=$(cat prompt.txt)
+            echo '{"contents":[{"parts":[{"text":""}]}]}' | jq --arg text "$PROMPT_CONTENT" '.contents[0].parts[0].text = $text' > request.json
+          else
+            # Fallback: Use python for proper JSON escaping
+            python3 -c "
+import json
+import sys
+with open('prompt.txt', 'r') as f:
+    content = f.read()
+payload = {
+    'contents': [{
+        'parts': [{
+            'text': content
+        }]
+    }]
+}
+with open('request.json', 'w') as f:
+    json.dump(payload, f)
+"
+          fi
           
           # Call Gemini API directly using curl
           if curl -s -H "Content-Type: application/json" \

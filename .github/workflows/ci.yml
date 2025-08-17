@@ -137,17 +137,29 @@ jobs:
           # Set API key
           export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
           
-          # Create request payload (escape quotes properly)
-          PROMPT_CONTENT=$(cat lint_prompt.txt | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
-          
-          # Create JSON payload using echo commands to avoid quoting issues
-          echo "{" > api_request.json
-          echo '  "contents": [{' >> api_request.json
-          echo '    "parts": [{' >> api_request.json
-          echo "      \"text\": \"$PROMPT_CONTENT\"" >> api_request.json
-          echo '    }]' >> api_request.json
-          echo '  }]' >> api_request.json
-          echo "}" >> api_request.json
+          # Properly escape content for JSON using jq or python
+          if command -v jq >/dev/null 2>&1; then
+            # Use jq to properly escape JSON
+            PROMPT_CONTENT=$(cat lint_prompt.txt)
+            echo '{"contents":[{"parts":[{"text":""}]}]}' | jq --arg text "$PROMPT_CONTENT" '.contents[0].parts[0].text = $text' > api_request.json
+          else
+            # Fallback: Use python for proper JSON escaping
+            python3 -c "
+import json
+import sys
+with open('lint_prompt.txt', 'r') as f:
+    content = f.read()
+payload = {
+    'contents': [{
+        'parts': [{
+            'text': content
+        }]
+    }]
+}
+with open('api_request.json', 'w') as f:
+    json.dump(payload, f)
+"
+          fi
           
           echo "📤 Sending request to Gemini API..."
           
