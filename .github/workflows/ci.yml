@@ -66,61 +66,160 @@ jobs:
         id: lint
         continue-on-error: true
         run: |
-          bun run lint > lint_errors.log 2>&1
-          echo "lint_errors<<EOF" >> $GITHUB_OUTPUT
-          cat lint_errors.log >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Run linting and capture exit code
+          if bun run lint > lint_output.log 2>&1; then
+            echo "lint_passed=true" >> $GITHUB_OUTPUT
+            echo "lint_errors=" >> $GITHUB_OUTPUT
+            echo "✅ Linting passed - no errors found"
+          else
+            echo "lint_passed=false" >> $GITHUB_OUTPUT
+            echo "❌ Linting failed - capturing errors"
+            
+            # Only capture actual error lines, filter out noise
+            grep -E '(error|Error|ERROR|warning|Warning|WARNING)' lint_output.log > lint_errors.log || echo "No specific error patterns found, using full output" > lint_errors.log && cat lint_output.log > lint_errors.log
+            
+            echo "lint_errors<<EOF" >> $GITHUB_OUTPUT
+            cat lint_errors.log >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            echo "--- Captured Lint Errors ---"
+            cat lint_errors.log
+            echo "---------------------------"
+          fi
 
       - name: Triage and Fix Lint Errors
-        if: steps.lint.outcome == 'failure'
+        if: steps.lint.outputs.lint_passed == 'false'
         id: ai_lint_triage
         uses: google-github-actions/run-gemini-cli@main
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           prompt: |
-            You are an expert programmer. Analyze the following linting errors and provide a fix. 
+            You are an expert programmer. Analyze the following linting errors and provide a fix.
+
+            **CRITICAL FORMATTING REQUIREMENTS**:
+            - Your response MUST start with either `AUTOMATIC_FIX:` or `MANUAL_SUGGESTION:` on its own line
+            - Do NOT include any explanatory text before these keywords
+            - These keywords are case-sensitive and must be followed by a colon
 
             **Instructions**:
-            1. First, try to provide an automatic fix as a series of shell commands (e.g., sed). If you can, start your response with the line `AUTOMATIC_FIX:` followed by the commands.
-            2. If and only if a safe automatic fix is not possible, provide a manual suggestion as a markdown comment. Start your response with the line `MANUAL_SUGGESTION:`.
+            1. If you can provide a safe automatic fix using shell commands (sed, find, etc.), start your response with:
+               ```
+               AUTOMATIC_FIX:
+               your shell commands here
+               ```
 
-            Errors: ${{ steps.lint.outputs.lint_errors }}
+            2. If automatic fixing is not safe or possible, start your response with:
+               ```
+               MANUAL_SUGGESTION:
+               your markdown suggestion here
+               ```
+
+            **Examples**:
+            ✅ Good response:
+            ```
+            AUTOMATIC_FIX:
+            sed -i 's/var /const /g' src/*.js
+            ```
+
+            ❌ Bad response:
+            ```
+            I can help you fix these linting errors.
+            
+            AUTOMATIC_FIX:
+            sed -i 's/var /const /g' src/*.js
+            ```
+
+            **Linting Errors to Fix**:
+            ${{ steps.lint.outputs.lint_errors }}
 
       - name: Handle Gemini Response
         id: handle_gemini_response
-        if: steps.lint.outcome == 'failure'
+        if: steps.lint.outputs.lint_passed == 'false'
         run: |
           RESPONSE="${{ steps.ai_lint_triage.outputs.gemini-response }}"
-          if [[ $(echo "$RESPONSE" | head -n 1) == "AUTOMATIC_FIX:" ]]; then
-            echo "AI provided an automatic fix."
-            FIX_COMMANDS=$(echo "$RESPONSE" | tail -n +2)
-            eval "$FIX_COMMANDS"
-            echo "fix_type=code" >> $GITHUB_OUTPUT
-          elif [[ $(echo "$RESPONSE" | head -n 1) == "MANUAL_SUGGESTION:" ]]; then
-            echo "AI provided a manual suggestion."
-            COMMENT_BODY=$(echo "$RESPONSE" | tail -n +2)
-            echo "fix_type=notification" >> $GITHUB_OUTPUT
-            echo "comment_body<<EOF" >> $GITHUB_OUTPUT
-            echo "$COMMENT_BODY" >> $GITHUB_OUTPUT
+          # 🔍 Debug: Always log the raw response
+          echo "═══ Full Gemini AI Response ═══"
+          echo "$RESPONSE"
+          echo "═══════════════════════════════"
+          
+          # 🔧 Robust parsing with pattern matching
+          if echo "$RESPONSE" | grep -iq "AUTOMATIC_FIX:"; then
+            echo "✅ Detected: AUTOMATIC_FIX pattern found"
+            echo "fix_type=automatic" >> $GITHUB_OUTPUT
+            
+            # Extract content *after* the keyword, handle markdown code blocks
+            FIX_COMMANDS=$(echo "$RESPONSE" | sed -n '/AUTOMATIC_FIX:/I,$p' | tail -n +2 | sed 's/^```[a-z]*//; s/^```//; s/```$//' | sed '/^[[:space:]]*$/d' | sed 's/^[[:space:]]*//')
+            
+            echo "fix_commands<<EOF" >> $GITHUB_OUTPUT
+            echo "$FIX_COMMANDS" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
+            
+            echo "📝 Extracted Commands:"
+            echo "$FIX_COMMANDS"
+          elif echo "$RESPONSE" | grep -iq "MANUAL_SUGGESTION:"; then
+            echo "✅ Detected: MANUAL_SUGGESTION pattern found"
+            echo "fix_type=manual" >> $GITHUB_OUTPUT
+            
+            # Extract content after the keyword
+            SUGGESTION_TEXT=$(echo "$RESPONSE" | sed -n '/MANUAL_SUGGESTION:/I,$p' | tail -n +2)
+            
+            echo "suggestion_text<<EOF" >> $GITHUB_OUTPUT
+            echo "$SUGGESTION_TEXT" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            echo "📝 Extracted Suggestion:"
+            echo "$SUGGESTION_TEXT"
           else
-            echo "AI returned an unexpected response format."
-            exit 1
+            # 🛡️ Graceful Fallback: No keyword found, create manual suggestion with raw output
+            echo "⚠️  Warning: Could not find AUTOMATIC_FIX or MANUAL_SUGGESTION keywords"
+            echo "🔄 Defaulting to manual suggestion mode with full AI response"
+            echo "::warning::AI response format unexpected - defaulting to manual suggestion"
+            
+            echo "fix_type=manual" >> $GITHUB_OUTPUT
+            
+            FALLBACK_TEXT="🤖 **AI Response Analysis Required**
+
+The AI provided a response but not in the expected format. Please review the full output below and apply fixes manually if needed:
+
+\`\`\`
+${RESPONSE}
+\`\`\`
+
+*This typically happens when the AI provides explanatory text before the fix commands. Look for actionable commands in the response above.*"
+            
+            echo "suggestion_text<<EOF" >> $GITHUB_OUTPUT
+            echo "$FALLBACK_TEXT" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            
+            echo "📝 Created fallback suggestion with full AI response"
           fi
+          
+          echo "═══════════════════════════════"
+          echo "🎯 Final Output: $(grep 'fix_type=' <<< "$GITHUB_OUTPUT" | tail -1 | cut -d'=' -f2 || echo 'unknown')"
+          echo "═══════════════════════════════"
 
       - name: Post Lint Fix Suggestion
-        if: steps.ai_lint_triage.outputs.fix_type == 'notification'
+        if: steps.handle_gemini_response.outputs.fix_type == 'manual'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: ai-lint-suggestion
-          message: ${{ steps.ai_lint_triage.outputs.comment_body }}
+          message: ${{ steps.handle_gemini_response.outputs.suggestion_text }}
 
       - name: Verify and Commit Lint Fix
-        if: steps.handle_gemini_response.outputs.fix_type == 'code'
+        if: steps.handle_gemini_response.outputs.fix_type == 'automatic'
         run: |
-          echo "Verifying AI fix by re-running the linter..."
+          echo "🚀 Applying AI-generated fix commands..."
+          echo "Commands to execute:"
+          echo "${{ steps.handle_gemini_response.outputs.fix_commands }}"
+          echo "════════════════════════════════════════"
+          
+          # Execute the AI-generated commands
+          ${{ steps.handle_gemini_response.outputs.fix_commands }}
+          
+          echo "✅ AI fix commands executed successfully"
+          echo "🔍 Verifying fix by re-running the linter..."
           if ! bun run lint; then
-            echo "AI fix did not resolve linting errors. Failing workflow."
+            echo "❌ AI fix did not resolve linting errors. Failing workflow."
             exit 1
           fi
           
