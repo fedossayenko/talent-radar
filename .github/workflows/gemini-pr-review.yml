@@ -29,10 +29,9 @@ jobs:
         id: gemini_review
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DIFF: ${{ steps.get_diff.outputs.diff }}
         run: |
-          PROMPT="You are an expert software engineer reviewing a pull request. Please analyze the following code changes (in git diff format) and provide feedback. Focus on potential bugs, style issues, and adherence to best practices for a TypeScript monorepo. Structure your feedback clearly. Diff:
-
-${{ steps.get_diff.outputs.diff }}"
+          PROMPT="You are an expert software engineer reviewing a pull request. Please analyze the following code changes (in git diff format) and provide feedback. Focus on potential bugs, style issues, and adherence to best practices for a TypeScript monorepo. Structure your feedback clearly. Diff:\n\n$DIFF"
           API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$GEMINI_API_KEY"
           
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
