@@ -81,7 +81,7 @@ jobs:
           prompt: "Errors: ${{ steps.lint.outputs.lint_errors }}"
 
       - name: Handle Gemini Response
-        if: steps.ai_lint_triage.outputs.gemini-response
+        if: steps.lint.outcome == 'failure'
         run: |
           RESPONSE="${{ steps.ai_lint_triage.outputs.gemini-response }}"
           if [[ $(echo "$RESPONSE" | head -n 1) == "AUTOMATIC_FIX:" ]]; then
