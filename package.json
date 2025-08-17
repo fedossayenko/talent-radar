@@ -9,7 +9,7 @@
   ],
   "scripts": {
     "dev": "bun run dev:api",
-    "dev:api": "cd apps/api && bun run dev",
+    "dev:api": "cd apps/api && bun run start:dev",
     "dev:web": "echo 'Web app not implemented yet'",
     "dev:scraper": "cd apps/api && bun run start:scraper",
     "build": "bun run build:api",
