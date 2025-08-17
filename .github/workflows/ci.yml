@@ -65,7 +65,7 @@ jobs:
       - name: Lint code
         id: lint
         continue-on-error: true
-                run: |
+        run: |
           bun run lint > lint_errors.log 2>&1
           echo "lint_errors<<EOF" >> $GITHUB_OUTPUT
           cat lint_errors.log >> $GITHUB_OUTPUT
