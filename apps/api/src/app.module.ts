@@ -22,6 +22,7 @@ import { appConfig } from './config/app.config';
 import { databaseConfig } from './config/database.config';
 import { redisConfig } from './config/redis.config';
 import { aiConfig } from './config/ai.config';
+import scraperConfig from './config/scraper.config';
 
 // Health and monitoring
 import { HealthModule } from './common/health/health.module';
@@ -32,7 +33,7 @@ import { MetricsModule } from './common/metrics/metrics.module';
     // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, redisConfig, aiConfig],
+      load: [appConfig, databaseConfig, redisConfig, aiConfig, scraperConfig],
       envFilePath: ['.env.local', '.env'],
     }),
 

@@ -4,7 +4,7 @@ import { DatabaseHelper } from './database.helper';
 beforeAll(async () => {
   // Set test environment variables
   process.env.NODE_ENV = 'test';
-  process.env.DATABASE_URL = process.env.DATABASE_URL || 'file:./test/tmp/test.db';
+  process.env.DATABASE_URL = process.env.DATABASE_URL || 'file:./test.db';
   process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
   
   // Initialize test database

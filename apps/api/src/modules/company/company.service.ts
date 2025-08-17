@@ -153,6 +153,50 @@ export class CompanyService {
     }
   }
 
+  async findOrCreate(companyData: {
+    name: string;
+    website?: string;
+    description?: string;
+    industry?: string;
+    location?: string;
+  }) {
+    this.logger.log(`Finding or creating company: ${companyData.name}`);
+
+    try {
+      // First try to find existing company
+      const existingCompany = await this.prisma.company.findFirst({
+        where: {
+          name: {
+            equals: companyData.name,
+          },
+        },
+      });
+
+      if (existingCompany) {
+        this.logger.log(`Found existing company: ${existingCompany.name} (ID: ${existingCompany.id})`);
+        return existingCompany;
+      }
+
+      // Create new company if not found
+      const newCompany = await this.prisma.company.create({
+        data: {
+          name: companyData.name,
+          website: companyData.website,
+          description: companyData.description,
+          industry: companyData.industry || 'Technology',
+          location: companyData.location,
+        },
+      });
+
+      this.logger.log(`Created new company: ${newCompany.name} (ID: ${newCompany.id})`);
+      return newCompany;
+
+    } catch (error) {
+      this.logger.error(`Failed to find or create company ${companyData.name}:`, error);
+      throw error;
+    }
+  }
+
   async analyzeCompany(id: string, forceRefresh = false) {
     this.logger.log(`Analyzing company ${id}, forceRefresh: ${forceRefresh}`);
 
