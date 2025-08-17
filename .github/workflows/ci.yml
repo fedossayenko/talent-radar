@@ -149,18 +149,25 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run security audit
-        id: security_audit
+        id: bun_audit
         continue-on-error: true
         run: bun audit
 
+      - name: Run dependency review
+        id: dep_review
+        continue-on-error: true
+        uses: actions/dependency-review-action@v4
+        if: github.event_name == 'pull_request'
+
       - name: Auto-fix Security Issues with AI
-        if: failure() && steps.security_audit.outcome == 'failure'
+        if: steps.bun_audit.outcome == 'failure' || steps.dep_review.outcome == 'failure'
         id: ai_security_fix
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BUN_AUDIT_ERRORS: ${{ steps.bun_audit.outputs.stdout }}${{ steps.bun_audit.outputs.stderr }}
+          DEP_REVIEW_ERRORS: ${{ steps.dep_review.outputs.stdout }}${{ steps.dep_review.outputs.stderr }}
         run: |
-          AUDIT_ERRORS="${{ steps.security_audit.outputs.stdout }}${{ steps.security_audit.outputs.stderr }}"
-          PROMPT="You are a cybersecurity expert. The following 'bun audit' command found vulnerabilities. Provide a series of 'bun update <package>' commands to fix them. Only output the shell commands. If a fix requires a major version bump that might break the code, add a comment explaining the risk. If no fix is possible, output 'No fix found'.\n\nAudit Report:\n$AUDIT_ERRORS"
+          PROMPT="You are a cybersecurity expert. The following security checks failed. Analyze all reports and provide a consolidated series of 'bun update <package>' commands to fix all vulnerabilities. Only output the shell commands. If no fix is possible, output 'No fix found'.\n\nBUN AUDIT REPORT:\n$BUN_AUDIT_ERRORS\n\nDEPENDENCY REVIEW REPORT:\n$DEP_REVIEW_ERRORS"
           
           API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
@@ -178,10 +185,18 @@ jobs:
       - name: Verify and Commit Security Fix
         if: steps.ai_security_fix.outputs.applied_fix == 'true'
         run: |
-          echo "Verifying AI fix by re-running security audit..."
+          echo "Verifying AI fix by re-running security checks..."
+          # Re-run bun audit
           if ! bun audit; then
-            echo "AI fix did not resolve security issues. Failing workflow."
+            echo "AI fix did not resolve bun audit issues. Failing workflow."
             exit 1
+          fi
+          # Re-run dependency review if it was the one that failed
+          if [[ "${{ steps.dep_review.outcome }}" == "failure" ]]; then
+            if ! actions/dependency-review-action@v4; then
+              echo "AI fix did not resolve dependency review issues. Failing workflow."
+              exit 1
+            fi
           fi
           
           echo "Security issues fixed successfully. Committing changes..."
@@ -190,10 +205,6 @@ jobs:
           git add bun.lockb
           git commit -m "chore(ci): apply automatic security audit fixes"
           git push
-
-      - name: Run dependency review
-        uses: actions/dependency-review-action@v4
-        if: github.event_name == 'pull_request'
 
   docker:
     name: Docker Build Test
