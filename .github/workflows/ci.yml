@@ -140,15 +140,8 @@ jobs:
           # Create request payload (escape quotes properly)
           PROMPT_CONTENT=$(cat lint_prompt.txt | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
           
-          cat > api_request.json << EOF
-{
-  "contents": [{
-    "parts": [{
-      "text": "$PROMPT_CONTENT"
-    }]
-  }]
-}
-EOF
+          # Create JSON payload using printf to avoid HEREDOC issues
+          printf '{\n  "contents": [{\n    "parts": [{\n      "text": "%s"\n    }]\n  }]\n}' "$PROMPT_CONTENT" > api_request.json
           
           echo "📤 Sending request to Gemini API..."
           
