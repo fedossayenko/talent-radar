@@ -65,7 +65,11 @@ jobs:
       - name: Lint code
         id: lint
         continue-on-error: true
-        run: bun run lint > lint_errors.log 2>&1
+                run: |
+          bun run lint > lint_errors.log 2>&1
+          echo "lint_errors<<EOF" >> $GITHUB_OUTPUT
+          cat lint_errors.log >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Triage and Fix Lint Errors
         if: steps.lint.outcome == 'failure'
