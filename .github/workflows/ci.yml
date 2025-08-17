@@ -65,22 +65,32 @@ jobs:
       - name: Lint code
         id: lint
         continue-on-error: true
-        run: bun run lint > lint_errors.log 2>&1
+        run: |
+          bun run lint > lint_errors.log 2>&1
+          echo "lint_errors<<EOF" >> $GITHUB_OUTPUT
+          cat lint_errors.log >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Triage and Fix Lint Errors
         if: steps.lint.outcome == 'failure'
         id: ai_lint_triage
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          LINT_ERRORS=$(cat lint_errors.log)
-          PROMPT_TEMPLATE=$(cat .github/workflows/lint-fix.prompt)
-          PROMPT="$PROMPT_TEMPLATE\n\n**Errors**:\n$LINT_ERRORS"
-          
-          API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
-          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
-          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL" | jq -r '.candidates[0].content.parts[0].text')
+        uses: google-github-actions/run-gemini-cli@main
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: |
+            You are an expert programmer. Analyze the following linting errors and provide a fix. 
 
+            **Instructions**:
+            1. First, try to provide an automatic fix as a series of shell commands (e.g., sed). If you can, start your response with the line `AUTOMATIC_FIX:` followed by the commands.
+            2. If and only if a safe automatic fix is not possible, provide a manual suggestion as a markdown comment. Start your response with the line `MANUAL_SUGGESTION:`.
+
+            Errors: ${{ steps.lint.outputs.lint_errors }}
+
+      - name: Handle Gemini Response
+        id: handle_gemini_response
+        if: steps.lint.outcome == 'failure'
+        run: |
+          RESPONSE="${{ steps.ai_lint_triage.outputs.gemini-response }}"
           if [[ $(echo "$RESPONSE" | head -n 1) == "AUTOMATIC_FIX:" ]]; then
             echo "AI provided an automatic fix."
             FIX_COMMANDS=$(echo "$RESPONSE" | tail -n +2)
@@ -106,7 +116,7 @@ jobs:
           message: ${{ steps.ai_lint_triage.outputs.comment_body }}
 
       - name: Verify and Commit Lint Fix
-        if: steps.ai_lint_triage.outputs.fix_type == 'code'
+        if: steps.handle_gemini_response.outputs.fix_type == 'code'
         run: |
           echo "Verifying AI fix by re-running the linter..."
           if ! bun run lint; then
