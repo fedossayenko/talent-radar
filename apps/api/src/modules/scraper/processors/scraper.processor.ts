@@ -10,7 +10,7 @@ export interface ScrapingJobData {
 }
 
 export interface HealthCheckJobData {
-  // Empty interface for health check jobs
+  timestamp?: number; // Optional timestamp for health check jobs
 }
 
 export type AllJobData = ScrapingJobData | HealthCheckJobData;
