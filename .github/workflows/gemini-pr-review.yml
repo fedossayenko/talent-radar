@@ -38,7 +38,7 @@ jobs:
 2.  **Categorize every suggestion by severity.** You MUST use one of the following severity levels:
     *   `critical`: A potential bug, security vulnerability, or major performance issue.
     *   `high`: A major design, architectural, or readability issue.
-    *   `medium`: A violation of best practices or style conventions.
+      *   `medium`: A violation of best practices or style conventions.
     *   `low`: A minor suggestion or nitpick.
 3.  **Provide context.** For each suggestion, specify the file and line number if possible.
 4.  **Be concise.** Keep your suggestions and reasoning brief and to the point.
@@ -55,13 +55,13 @@ jobs:
           RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL")
           
           # Check for errors from the API
-          if echo "$RESPONSE" | jq -e '.error' > /dev/null; then
+          if echo "$RESPONSE" | jq -e ".error" > /dev/null; then
             echo "Error from Gemini API:"
-            echo "$RESPONSE" | jq '.error'
+            echo "$RESPONSE" | jq ".error"
             exit 1
           fi
 
-          REVIEW_COMMENT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+          REVIEW_COMMENT=$(echo "$RESPONSE" | jq -r ".candidates[0].content.parts[0].text")
           
           echo "comment<<EOF" >> $GITHUB_OUTPUT
           echo "$REVIEW_COMMENT" >> $GITHUB_OUTPUT
