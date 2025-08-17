@@ -5,6 +5,7 @@ import { DevBgScraper } from '../../../src/modules/scraper/scrapers/dev-bg.scrap
 import { VacancyService } from '../../../src/modules/vacancy/vacancy.service';
 import { CompanyService } from '../../../src/modules/company/company.service';
 import { PrismaService } from '../../../src/common/database/prisma.service';
+import { SalaryUtils } from '../../../src/modules/scraper/utils/salary.utils';
 import { DevBgJobListing } from '../../../src/modules/scraper/scrapers/dev-bg.scraper';
 
 describe('ScraperService Integration Tests', () => {
@@ -13,6 +14,7 @@ describe('ScraperService Integration Tests', () => {
   let vacancyService: VacancyService;
   let companyService: CompanyService;
   let prismaService: PrismaService;
+  let salaryUtils: SalaryUtils;
 
   // Mock data
   const mockCompany = {
@@ -106,6 +108,7 @@ describe('ScraperService Integration Tests', () => {
             },
           },
         },
+        SalaryUtils,
       ],
     }).compile();
 
@@ -114,6 +117,7 @@ describe('ScraperService Integration Tests', () => {
     vacancyService = module.get<VacancyService>(VacancyService);
     companyService = module.get<CompanyService>(CompanyService);
     prismaService = module.get<PrismaService>(PrismaService);
+    salaryUtils = module.get<SalaryUtils>(SalaryUtils);
   });
 
   beforeEach(() => {
@@ -280,15 +284,19 @@ describe('ScraperService Integration Tests', () => {
 
   describe('Data Processing Methods', () => {
     it('should parse salary ranges correctly', () => {
-      const parseSalaryMin = (service as any).parseSalaryMin.bind(service);
-      const parseSalaryMax = (service as any).parseSalaryMax.bind(service);
-
-      expect(parseSalaryMin('3000-5000 BGN')).toBe(300000); // Convert to cents
-      expect(parseSalaryMax('3000-5000 BGN')).toBe(500000);
-      expect(parseSalaryMin('2500 BGN')).toBe(250000);
-      expect(parseSalaryMax('2500 BGN')).toBe(250000);
-      expect(parseSalaryMin(undefined)).toBeNull();
-      expect(parseSalaryMax(undefined)).toBeNull();
+      expect(salaryUtils.parseSalaryMin('3000-5000 BGN')).toBe(300000); // Convert to cents
+      expect(salaryUtils.parseSalaryMax('3000-5000 BGN')).toBe(500000);
+      expect(salaryUtils.parseSalaryMin('2500 BGN')).toBe(250000);
+      expect(salaryUtils.parseSalaryMax('2500 BGN')).toBe(250000);
+      expect(salaryUtils.parseSalaryMin(undefined)).toBeNull();
+      expect(salaryUtils.parseSalaryMax(undefined)).toBeNull();
+      
+      // Test the new structured parsing as well
+      const range = salaryUtils.parseSalaryRange('3000-5000 BGN');
+      expect(range.min).toBe(300000);
+      expect(range.max).toBe(500000);
+      expect(range.currency).toBe('BGN');
+      expect(range.isRange).toBe(true);
     });
 
     it('should extract experience level from job titles', () => {

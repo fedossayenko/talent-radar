@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
+import { DateUtils } from '../utils/date.utils';
 
 export interface RawJobData {
   title: string;
@@ -22,6 +23,8 @@ export interface RawJobData {
 @Injectable()
 export class JobParserService {
   private readonly logger = new Logger(JobParserService.name);
+
+  constructor(private readonly dateUtils: DateUtils) {}
 
   /**
    * Parses a job element from the DOM into raw structured data
@@ -130,7 +133,6 @@ export class JobParserService {
    * Searches for Bulgarian date patterns in text content
    */
   findBulgarianDateInText(text: string): string | null {
-    const bulgariandateMatch = text.match(/(\d{1,2})\s+(януари|февруари|март|април|май|юни|юли|август|септември|октомври|ноември|декември)/i);
-    return bulgariandateMatch ? bulgariandateMatch[0] : null;
+    return this.dateUtils.findBulgarianDateString(text);
   }
 }

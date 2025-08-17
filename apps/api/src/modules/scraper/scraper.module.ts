@@ -9,6 +9,9 @@ import { ScraperController } from './scraper.controller';
 import { TranslationService } from './services/translation.service';
 import { JobParserService } from './services/job-parser.service';
 import { TechPatternService } from './services/tech-pattern.service';
+import { DateUtils } from './utils/date.utils';
+import { SalaryUtils } from './utils/salary.utils';
+import { ExperienceUtils } from './utils/experience.utils';
 import { VacancyModule } from '../vacancy/vacancy.module';
 import { CompanyModule } from '../company/company.module';
 import { DatabaseModule } from '../../common/database/database.module';
@@ -42,6 +45,9 @@ import scraperConfig from '../../config/scraper.config';
     TranslationService,
     JobParserService,
     TechPatternService,
+    DateUtils,
+    SalaryUtils,
+    ExperienceUtils,
   ],
   exports: [ScraperService, ScraperScheduler],
 })

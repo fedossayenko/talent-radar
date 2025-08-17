@@ -3,6 +3,8 @@ import { DevBgScraper, DevBgJobListing } from './scrapers/dev-bg.scraper';
 import { VacancyService } from '../vacancy/vacancy.service';
 import { CompanyService } from '../company/company.service';
 import { PrismaService } from '../../common/database/prisma.service';
+import { SalaryUtils } from './utils/salary.utils';
+import { ExperienceUtils } from './utils/experience.utils';
 
 export interface ScrapingResult {
   totalJobsFound: number;
@@ -22,6 +24,8 @@ export class ScraperService {
     private readonly vacancyService: VacancyService,
     private readonly companyService: CompanyService,
     private readonly prisma: PrismaService,
+    private readonly salaryUtils: SalaryUtils,
+    private readonly experienceUtils: ExperienceUtils,
   ) {
     this.logger.log('ScraperService initialized');
   }
@@ -107,9 +111,9 @@ export class ScraperService {
         description,
         requirements: JSON.stringify(jobListing.technologies),
         location: jobListing.location,
-        salaryMin: this.parseSalaryMin(jobListing.salaryRange),
-        salaryMax: this.parseSalaryMax(jobListing.salaryRange),
-        experienceLevel: this.extractExperienceLevel(jobListing.title),
+        salaryMin: this.salaryUtils.parseSalaryMin(jobListing.salaryRange),
+        salaryMax: this.salaryUtils.parseSalaryMax(jobListing.salaryRange),
+        experienceLevel: this.experienceUtils.extractExperienceLevel(jobListing.title),
         employmentType: this.mapWorkModelToEmploymentType(jobListing.workModel),
         companyId: company.id,
         sourceUrl: jobListing.url,
@@ -166,38 +170,7 @@ export class ScraperService {
     });
   }
 
-  private parseSalaryMin(salaryRange?: string): number | null {
-    if (!salaryRange) return null;
 
-    const match = salaryRange.match(/(\d+)/);
-    return match ? parseInt(match[1], 10) * 100 : null; // Convert to cents
-  }
-
-  private parseSalaryMax(salaryRange?: string): number | null {
-    if (!salaryRange) return null;
-
-    const matches = salaryRange.match(/(\d+)/g);
-    if (matches && matches.length > 1) {
-      return parseInt(matches[1], 10) * 100; // Convert to cents
-    }
-    return this.parseSalaryMin(salaryRange);
-  }
-
-  private extractExperienceLevel(title: string): string {
-    const titleLower = title.toLowerCase();
-    
-    if (titleLower.includes('senior') || titleLower.includes('lead') || titleLower.includes('principal')) {
-      return 'senior';
-    }
-    if (titleLower.includes('junior') || titleLower.includes('graduate') || titleLower.includes('entry')) {
-      return 'junior';
-    }
-    if (titleLower.includes('mid') || titleLower.includes('intermediate')) {
-      return 'mid';
-    }
-    
-    return 'mid'; // Default to mid-level
-  }
 
   private mapWorkModelToEmploymentType(workModel: string): string {
     const workModelMap: Record<string, string> = {

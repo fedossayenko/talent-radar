@@ -1,10 +1,13 @@
 import { TranslationService } from '../../../src/modules/scraper/services/translation.service';
+import { DateUtils } from '../../../src/modules/scraper/utils/date.utils';
 
 describe('TranslationService', () => {
   let service: TranslationService;
+  let dateUtils: DateUtils;
 
   beforeEach(() => {
-    service = new TranslationService();
+    dateUtils = new DateUtils();
+    service = new TranslationService(dateUtils);
   });
 
   describe('translateLocation', () => {

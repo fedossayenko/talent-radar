@@ -1,11 +1,14 @@
 import { JobParserService } from '../../../src/modules/scraper/services/job-parser.service';
+import { DateUtils } from '../../../src/modules/scraper/utils/date.utils';
 import * as cheerio from 'cheerio';
 
 describe('JobParserService', () => {
   let service: JobParserService;
+  let dateUtils: DateUtils;
 
   beforeEach(() => {
-    service = new JobParserService();
+    dateUtils = new DateUtils();
+    service = new JobParserService(dateUtils);
   });
 
   describe('parseJobFromElement', () => {

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { DateUtils } from '../utils/date.utils';
 
 /**
  * Service responsible for translating scraped data from Bulgarian to English
@@ -6,6 +7,7 @@ import { Injectable } from '@nestjs/common';
  */
 @Injectable()
 export class TranslationService {
+  constructor(private readonly dateUtils: DateUtils) {}
   private readonly locationMap = new Map<string, string>([
     ['София', 'Sofia'],
     ['Пловдив', 'Plovdiv'],
@@ -41,20 +43,6 @@ export class TranslationService {
     ['Фулстак', 'Full-stack'],
   ]);
 
-  private readonly monthMap = new Map<string, number>([
-    ['януари', 0],
-    ['февруари', 1],
-    ['март', 2],
-    ['април', 3],
-    ['май', 4],
-    ['юни', 5],
-    ['юли', 6],
-    ['август', 7],
-    ['септември', 8],
-    ['октомври', 9],
-    ['ноември', 10],
-    ['декември', 11],
-  ]);
 
   /**
    * Translates Bulgarian location names to English
@@ -87,20 +75,7 @@ export class TranslationService {
    * Parses Bulgarian date strings to Date objects
    */
   parseBulgarianDate(dateStr: string): Date {
-    const match = dateStr.match(/(\d{1,2})\s+(януари|февруари|март|април|май|юни|юли|август|септември|октомври|ноември|декември)/i);
-    
-    if (match) {
-      const day = parseInt(match[1], 10);
-      const monthName = match[2].toLowerCase();
-      const month = this.monthMap.get(monthName);
-      const year = new Date().getFullYear();
-      
-      if (month !== undefined) {
-        return new Date(year, month, day);
-      }
-    }
-    
-    return new Date(); // fallback to current date
+    return this.dateUtils.parseBulgarianDate(dateStr);
   }
 
   /**
