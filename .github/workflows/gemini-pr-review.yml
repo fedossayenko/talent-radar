@@ -31,7 +31,23 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           DIFF: ${{ steps.get_diff.outputs.diff }}
         run: |
-          PROMPT="You are an expert software engineer reviewing a pull request. Please analyze the following code changes (in git diff format) and provide feedback. Focus on potential bugs, style issues, and adherence to best practices for a TypeScript monorepo. Structure your feedback clearly. Diff:\n\n$DIFF"
+          PROMPT='''You are an AI code reviewer. Your task is to analyze the provided git diff and provide actionable suggestions for improvement.
+
+**Instructions:**
+1.  **Focus only on suggestions.** Do not summarize or explain what the code already does.
+2.  **Categorize every suggestion by severity.** You MUST use one of the following severity levels:
+    *   `critical`: A potential bug, security vulnerability, or major performance issue.
+    *   `high`: A major design, architectural, or readability issue.
+    *   `medium`: A violation of best practices or style conventions.
+    *   `low`: A minor suggestion or nitpick.
+3.  **Provide context.** For each suggestion, specify the file and line number if possible.
+4.  **Be concise.** Keep your suggestions and reasoning brief and to the point.
+5.  **If you find no issues to suggest, you MUST respond with the single phrase `No suggestions.`**
+
+**Git Diff to review:**
+'''
+          PROMPT+="$DIFF"
+
           API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$GEMINI_API_KEY"
           
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
@@ -39,8 +55,7 @@ jobs:
           RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL")
           
           # Check for errors from the API
-          if echo "$RESPONSE" | jq -e '.error' > /dev/null;
-            then
+          if echo "$RESPONSE" | jq -e '.error' > /dev/null; then
             echo "Error from Gemini API:"
             echo "$RESPONSE" | jq '.error'
             exit 1
