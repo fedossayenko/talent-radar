@@ -45,6 +45,7 @@ jobs:
             ${{ steps.get_diff.outputs.diff }}
 
       - name: Post Review Comment
+        if: steps.gemini_review.outputs.gemini-response != 'No critical or high severity issues found.'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: gemini-review
