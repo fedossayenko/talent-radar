@@ -27,36 +27,29 @@ jobs:
 
       - name: Call Gemini API for Review
         id: gemini_review
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          DIFF: ${{ steps.get_diff.outputs.diff }}
-        run: |
-          PROMPT_TEMPLATE=$(cat .github/workflows/pr-review.prompt)
-          PROMPT="$PROMPT_TEMPLATE\n\n**Git Diff to review:**\n$DIFF"
+        uses: google-github-actions/run-gemini-cli@main
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: |
+            You are an AI code reviewer. Your task is to analyze the provided git diff and identify only the most severe issues.
 
-          API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$GEMINI_API_KEY"
-          
-          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
+            **Instructions:**
+            1.  **Focus only on `critical` and `high` severity suggestions.** Do not report medium or low-severity issues like style conventions or minor nitpicks.
+            2.  **You MUST use one of the following severity levels for your findings:**
+                *   `critical`: A potential bug, security vulnerability, or major performance issue.
+                *   `high`: A major design or architectural issue.
+            3.  **Provide context.** For each suggestion, specify the file and line number if possible.
+            4.  **Be concise.** Keep your suggestions and reasoning brief and to the point.
+            5.  **If you find no critical or high issues, you MUST respond with the single phrase `No critical or high severity issues found.`**
 
-          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL")
-          
-          if echo "$RESPONSE" | jq -e '.error' > /dev/null; then
-            echo "Error from Gemini API:"
-            echo "$RESPONSE" | jq '.error'
-            exit 1
-          fi
-
-          REVIEW_COMMENT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
-          
-          echo "comment<<EOF" >> $GITHUB_OUTPUT
-          echo "$REVIEW_COMMENT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+            ${{ steps.get_diff.outputs.diff }}
 
       - name: Post Review Comment
+        if: steps.gemini_review.outputs.gemini-response != 'No critical or high severity issues found.'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
           header: gemini-review
           message: |
             ### ✨ AI Review ✨
             
-            ${{ steps.gemini_review.outputs.comment }}
+            ${{ steps.gemini_review.outputs.gemini-response }}
