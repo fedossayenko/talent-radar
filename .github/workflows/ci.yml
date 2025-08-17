@@ -76,7 +76,7 @@ jobs:
           LINT_ERRORS=$(cat lint_errors.log)
           PROMPT="You are an expert programmer tasked with fixing linting errors. Based on the following errors, provide a series of shell commands, primarily using 'sed', to fix the files directly. Output ONLY the shell commands. If you cannot find a fix, output 'No fix found'.\n\nErrors:\n$LINT_ERRORS"
           
-          API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=$GEMINI_API_KEY"
+          API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
           FIX_COMMANDS=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL" | jq -r '.candidates[0].content.parts[0].text')
 
@@ -93,8 +93,7 @@ jobs:
         if: steps.ai_lint_fix.outputs.applied_fix == 'true'
         run: |
           echo "Verifying AI fix by re-running the linter..."
-          if ! bun run lint;
-            then
+          if ! bun run lint; then
             echo "AI fix did not resolve linting errors. Failing workflow."
             exit 1
           fi
@@ -157,37 +156,60 @@ jobs:
       - name: Run dependency review
         id: dep_review
         continue-on-error: true
-        uses: actions/dependency-review-action@v4
-        if: github.event_name == 'pull_request'
+        run: actions/dependency-review-action@v4 > dep_review.log 2>&1
 
-      - name: Auto-fix Security Issues with AI
-        if: steps.bun_audit.outcome == 'failure' # Temporarily simplified to just bun_audit
-        id: ai_security_fix
+      - name: Triage and Fix Security Issues
+        id: ai_security_triage
+        if: steps.bun_audit.outcome == 'failure' || steps.dep_review.outcome == 'failure'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          AUDIT_ERRORS=$(cat bun_audit.log)
-          PROMPT="You are a cybersecurity expert. The following 'bun audit' command found vulnerabilities. Provide a series of 'bun update <package>' commands to fix them. Only output the shell commands. If no fix is possible, output 'No fix found'.\n\nAudit Report:\n$AUDIT_ERRORS"
-          
-          API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=$GEMINI_API_KEY"
-          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
-          FIX_COMMANDS=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL" | jq -r '.candidates[0].content.parts[0].text')
+          BUN_AUDIT_LOG="bun_audit.log"
+          DEP_REVIEW_LOG="dep_review.log"
 
-          if [[ -z "$FIX_COMMANDS" || "$FIX_COMMANDS" == "null" || "$FIX_COMMANDS" == "No fix found" ]]; then
-            echo "AI did not return a valid command for security issues. Output was: $FIX_COMMANDS"
-            exit 1
+          # Triage: Check for the specific configuration error first.
+          if grep -q "Dependency review is not supported" "$DEP_REVIEW_LOG"; then
+            echo "Detected configuration error. Asking AI for explanation..."
+            PROMPT="The 'Dependency Review' GitHub Action failed with the following error. Analyze it and write a user-friendly comment for the pull request explaining the problem and how to fix it in the repository settings. Provide a direct link to the settings page. Start the comment with '### Dependency Review Configuration Error'. Error log: $(cat $DEP_REVIEW_LOG)"
+            API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
+            JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
+            COMMENT_BODY=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL" | jq -r '.candidates[0].content.parts[0].text')
+            
+            echo "fix_type=notification" >> $GITHUB_OUTPUT
+            echo "comment_body<<EOF" >> $GITHUB_OUTPUT
+            echo "$COMMENT_BODY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+
+          # If not a config error, proceed with vulnerability fixing.
+          else
+            echo "Detected vulnerabilities. Asking AI for code fix..."
+            PROMPT="You are a cybersecurity expert. The following security checks failed. Analyze all reports and provide a consolidated series of 'bun update <package>' commands to fix all vulnerabilities. Only output the shell commands. If no fix is possible, output 'No fix found'.\n\nBUN AUDIT REPORT:\n$(cat $BUN_AUDIT_LOG)\n\nDEPENDENCY REVIEW REPORT:\n$(cat $DEP_REVIEW_LOG)"
+            API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
+            JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
+            FIX_COMMANDS=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL" | jq -r '.candidates[0].content.parts[0].text')
+
+            if [[ -z "$FIX_COMMANDS" || "$FIX_COMMANDS" == "null" || "$FIX_COMMANDS" == "No fix found" ]]; then
+              echo "AI did not return a valid command for security issues. Output was: $FIX_COMMANDS"
+              exit 1 # Exit without setting output
+            fi
+
+            echo "Applying AI-generated security fixes..."
+            eval "$FIX_COMMANDS"
+            echo "fix_type=code" >> $GITHUB_OUTPUT
           fi
 
-          echo "Applying AI-generated security fixes..."
-          eval "$FIX_COMMANDS"
-          echo "applied_fix=true" >> $GITHUB_OUTPUT
+      - name: Post Configuration Notification
+        if: steps.ai_security_triage.outputs.fix_type == 'notification'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: dependency-review-config-error
+          message: ${{ steps.ai_security_triage.outputs.comment_body }}
 
-      - name: Verify and Commit Security Fix
-        if: steps.ai_security_fix.outputs.applied_fix == 'true'
+      - name: Verify and Commit Code Fix
+        if: steps.ai_security_triage.outputs.fix_type == 'code'
         run: |
           echo "Verifying AI fix by re-running security audit..."
-          if ! bun audit;
-            then
+          if ! bun audit; then
             echo "AI fix did not resolve bun audit issues. Failing workflow."
             exit 1
           fi
