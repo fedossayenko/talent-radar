@@ -1,8 +1,11 @@
 name: CI
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 on:
-  push:
-    branches: [main, develop]
   pull_request:
     branches: [main, develop]
 
@@ -63,73 +66,7 @@ jobs:
           DATABASE_URL: file:./test/tmp/ci-test.db
 
       - name: Lint code
-        id: lint
-        continue-on-error: true
-        run: |
-          bun run lint > lint_errors.log 2>&1
-          echo "lint_errors<<EOF" >> $GITHUB_OUTPUT
-          cat lint_errors.log >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Triage and Fix Lint Errors
-        if: steps.lint.outcome == 'failure'
-        id: ai_lint_triage
-        uses: google-github-actions/run-gemini-cli@main
-        with:
-          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          prompt: |
-            You are an expert programmer. Analyze the following linting errors and provide a fix. 
-
-            **Instructions**:
-            1. First, try to provide an automatic fix as a series of shell commands (e.g., sed). If you can, start your response with the line `AUTOMATIC_FIX:` followed by the commands.
-            2. If and only if a safe automatic fix is not possible, provide a manual suggestion as a markdown comment. Start your response with the line `MANUAL_SUGGESTION:`.
-
-            Errors: ${{ steps.lint.outputs.lint_errors }}
-
-      - name: Handle Gemini Response
-        id: handle_gemini_response
-        if: steps.lint.outcome == 'failure'
-        run: |
-          RESPONSE="${{ steps.ai_lint_triage.outputs.gemini-response }}"
-          if [[ $(echo "$RESPONSE" | head -n 1) == "AUTOMATIC_FIX:" ]]; then
-            echo "AI provided an automatic fix."
-            FIX_COMMANDS=$(echo "$RESPONSE" | tail -n +2)
-            eval "$FIX_COMMANDS"
-            echo "fix_type=code" >> $GITHUB_OUTPUT
-          elif [[ $(echo "$RESPONSE" | head -n 1) == "MANUAL_SUGGESTION:" ]]; then
-            echo "AI provided a manual suggestion."
-            COMMENT_BODY=$(echo "$RESPONSE" | tail -n +2)
-            echo "fix_type=notification" >> $GITHUB_OUTPUT
-            echo "comment_body<<EOF" >> $GITHUB_OUTPUT
-            echo "$COMMENT_BODY" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "AI returned an unexpected response format."
-            exit 1
-          fi
-
-      - name: Post Lint Fix Suggestion
-        if: steps.ai_lint_triage.outputs.fix_type == 'notification'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: ai-lint-suggestion
-          message: ${{ steps.ai_lint_triage.outputs.comment_body }}
-
-      - name: Verify and Commit Lint Fix
-        if: steps.handle_gemini_response.outputs.fix_type == 'code'
-        run: |
-          echo "Verifying AI fix by re-running the linter..."
-          if ! bun run lint; then
-            echo "AI fix did not resolve linting errors. Failing workflow."
-            exit 1
-          fi
-          
-          echo "Linting errors fixed successfully. Committing changes..."
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "chore(ci): apply automatic linting fixes"
-          git push
+        run: bun run lint
 
       - name: Type check
         run: bun run type-check

@@ -1,12 +1,16 @@
+# AI PR Review workflow - DISABLED
+# This workflow has been disabled to reduce costs and complexity
+# Uncomment the 'on:' section below to re-enable when needed
+
 name: AI PR Reviewer
 
 permissions:
   contents: read
   pull-requests: write
 
-on:
-  pull_request:
-    types: [opened, synchronize]
+# on:
+#   pull_request:
+#     types: [opened, synchronize]
 
 jobs:
   review:
@@ -25,31 +29,28 @@ jobs:
           echo "$DIFF" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Call Gemini API for Review
-        id: gemini_review
-        uses: google-github-actions/run-gemini-cli@main
+      - name: AI Code Review
+        uses: freeedcom/ai-codereviewer@v1
+        id: ai_review
         with:
-          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          prompt: |
-            You are an AI code reviewer. Your task is to analyze the provided git diff and identify only the most severe issues.
-
-            **Instructions:**
-            1.  **Focus only on `critical` and `high` severity suggestions.** Do not report medium or low-severity issues like style conventions or minor nitpicks.
-            2.  **You MUST use one of the following severity levels for your findings:**
-                *   `critical`: A potential bug, security vulnerability, or major performance issue.
-                *   `high`: A major design or architectural issue.
-            3.  **Provide context.** For each suggestion, specify the file and line number if possible.
-            4.  **Be concise.** Keep your suggestions and reasoning brief and to the point.
-            5.  **If you find no critical or high issues, you MUST respond with the single phrase `No critical or high severity issues found.`**
-
-            ${{ steps.get_diff.outputs.diff }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          model: "gemini-1.5-flash"
+          review_style: "focused"
+          exclude_files: "*.md,*.json"
+          custom_prompt: |
+            Focus only on critical and high severity issues:
+            - Critical: bugs, security vulnerabilities, performance issues
+            - High: major design or architectural issues
+            Provide file and line context. Be concise and actionable.
+            If no issues found, respond: "No critical or high severity issues found."
 
       - name: Post Review Comment
-        if: steps.gemini_review.outputs.gemini-response != 'No critical or high severity issues found.'
+        if: steps.ai_review.outputs.review-result != 'No critical or high severity issues found.'
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          header: gemini-review
+          header: ai-review
           message: |
-            ### ✨ AI Review ✨
+            ### ✨ AI Code Review ✨
             
-            ${{ steps.gemini_review.outputs.gemini-response }}
+            ${{ steps.ai_review.outputs.review-result }}

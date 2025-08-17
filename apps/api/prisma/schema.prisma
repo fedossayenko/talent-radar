@@ -65,8 +65,10 @@ model Vacancy {
   location        String?
   salaryMin       Int?     // Use Int for currency (in cents)
   salaryMax       Int?
-  experienceLevel String?  // junior, mid, senior, lead, principal
-  employmentType  String?  // full-time, part-time, contract, internship
+  currency        String?  // Currency code (USD, EUR, BGN, etc.)
+  experienceLevel String?  // junior, mid, senior, lead, principal, entry, not_specified
+  employmentType  String?  // full-time, part-time, contract, internship, freelance
+  workModel       String?  // remote, hybrid, office, not_specified
   companyId       String
   sourceUrl       String?
   sourceSite      String?
@@ -75,12 +77,34 @@ model Vacancy {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  // AI-specific fields
+  contentHash            String?  // SHA-256 hash for caching extracted content
+  extractionConfidence   Float?   // AI confidence score (0-100)
+  extractionMetadata     String?  // JSON metadata: source, model used, processing time, etc.
+  qualityScore          Float?   // Overall quality assessment (0-100)
+  rawContent            String?  // Original scraped content for reprocessing
+  aiExtractedData       String?  // JSON of all AI-extracted structured data
+  
+  // Enhanced structured fields from AI extraction
+  responsibilities      String?  // JSON array of job responsibilities
+  technologies         String?  // JSON array of technologies and tools
+  benefits             String?  // JSON array of benefits and perks
+  educationLevel       String?  // high_school, bachelor, master, phd, not_specified
+  industry             String?  // Industry/sector
+  teamSize             String?  // Team size if mentioned
+  companySize          String?  // startup, small, medium, large, enterprise, not_specified
+  applicationDeadline  DateTime? // Application deadline if specified
+
   // Relations
   company      Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   scores       VacancyScore[]
   applications Application[]
 
   @@map("vacancies")
+  @@index([contentHash])
+  @@index([extractionConfidence])
+  @@index([qualityScore])
+  @@index([sourceSite])
 }
 
 // Vacancy Score model

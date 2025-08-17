@@ -9,8 +9,12 @@ import { ScraperController } from './scraper.controller';
 import { TranslationService } from './services/translation.service';
 import { JobParserService } from './services/job-parser.service';
 import { TechPatternService } from './services/tech-pattern.service';
+import { ContentExtractorService } from './services/content-extractor.service';
+import { HtmlCleanerService } from './services/html-cleaner.service';
+import { AiProcessingPipelineService } from './services/ai-processing-pipeline.service';
 import { VacancyModule } from '../vacancy/vacancy.module';
 import { CompanyModule } from '../company/company.module';
+import { AiModule } from '../ai/ai.module';
 import { DatabaseModule } from '../../common/database/database.module';
 import scraperConfig from '../../config/scraper.config';
 
@@ -20,6 +24,7 @@ import scraperConfig from '../../config/scraper.config';
     DatabaseModule,
     VacancyModule,
     CompanyModule,
+    AiModule,
     BullModule.registerQueue({
       name: 'scraper',
       defaultJobOptions: {
@@ -42,7 +47,10 @@ import scraperConfig from '../../config/scraper.config';
     TranslationService,
     JobParserService,
     TechPatternService,
+    ContentExtractorService,
+    HtmlCleanerService,
+    AiProcessingPipelineService,
   ],
-  exports: [ScraperService, ScraperScheduler],
+  exports: [ScraperService, ScraperScheduler, ContentExtractorService, HtmlCleanerService, AiProcessingPipelineService],
 })
 export class ScraperModule {}

@@ -1,0 +1,30 @@
+{
+  "title": "Developer",
+  "company": null,
+  "location": null,
+  "salaryMin": null,
+  "salaryMax": null,
+  "currency": null,
+  "experienceLevel": "not_specified",
+  "employmentType": "not_specified",
+  "workModel": "not_specified",
+  "description": "Job available. Good opportunity.",
+  "requirements": null,
+  "responsibilities": null,
+  "technologies": ["JavaScript"],
+  "benefits": null,
+  "educationLevel": "not_specified",
+  "industry": null,
+  "teamSize": null,
+  "companySize": "not_specified",
+  "applicationDeadline": null,
+  "postedDate": null,
+  "confidenceScore": 25,
+  "qualityScore": 18,
+  "extractionMetadata": {
+    "sourceType": "other",
+    "contentLength": 45,
+    "hasStructuredData": false,
+    "language": "en"
+  }
+}

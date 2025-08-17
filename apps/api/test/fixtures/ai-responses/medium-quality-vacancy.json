@@ -1,0 +1,55 @@
+{
+  "title": "Frontend Developer",
+  "company": "Digital Startup Ltd",
+  "location": "Remote",
+  "salaryMin": 4500,
+  "salaryMax": 6500,
+  "currency": "BGN",
+  "experienceLevel": "mid",
+  "employmentType": "full-time",
+  "workModel": "remote",
+  "description": "Join our growing team to build modern user interfaces for our web application. You'll work with the latest frontend technologies and collaborate with our design team to create exceptional user experiences.",
+  "requirements": [
+    "3+ years experience with React",
+    "Strong knowledge of JavaScript/TypeScript",
+    "Experience with CSS frameworks",
+    "Understanding of responsive design",
+    "Git version control experience"
+  ],
+  "responsibilities": [
+    "Develop and maintain React components",
+    "Collaborate with UX/UI designers",
+    "Optimize application performance",
+    "Participate in code reviews",
+    "Write unit tests"
+  ],
+  "technologies": [
+    "React",
+    "TypeScript",
+    "CSS",
+    "HTML",
+    "Tailwind CSS",
+    "Jest",
+    "Git"
+  ],
+  "benefits": [
+    "Remote work flexibility",
+    "Health insurance",
+    "Learning budget",
+    "Flexible hours"
+  ],
+  "educationLevel": "not_specified",
+  "industry": "Technology",
+  "teamSize": "8-12",
+  "companySize": "startup",
+  "applicationDeadline": null,
+  "postedDate": "2024-02-10T14:30:00Z",
+  "confidenceScore": 75,
+  "qualityScore": 68,
+  "extractionMetadata": {
+    "sourceType": "company_website",
+    "contentLength": 890,
+    "hasStructuredData": true,
+    "language": "en"
+  }
+}

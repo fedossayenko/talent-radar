@@ -58,6 +58,19 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
    */
   async getStats() {
     try {
+      // Detect database provider from connection string
+      const databaseUrl = process.env.DATABASE_URL || '';
+      const isSqlite = databaseUrl.includes('file:') || databaseUrl.includes('.db');
+      
+      if (isSqlite) {
+        // SQLite simplified stats
+        return {
+          tables: [],
+          connections: [{ total_connections: 1, active_connections: 1, idle_connections: 0 }],
+          database_size: [{ size: '0 MB' }]
+        };
+      }
+
       const tables = await this.$queryRaw`
         SELECT 
           schemaname,
