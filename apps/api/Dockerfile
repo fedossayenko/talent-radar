@@ -5,7 +5,7 @@ FROM oven/bun:1.2-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY package.json bun.lockb ./
+COPY package.json bun.lock ./
 COPY apps/api/package.json ./apps/api/
 
 # Install all dependencies (including dev dependencies for building)
@@ -25,10 +25,7 @@ RUN bun run build
 RUN bun install --production --frozen-lockfile
 
 # Production stage
-FROM node:22-alpine AS production
-
-# Install bun in production image
-RUN npm install -g bun
+FROM oven/bun:1.2-alpine AS production
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
@@ -78,8 +75,8 @@ USER nestjs
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node healthcheck.js
+  CMD bun healthcheck.js
 
 # Start the application with dumb-init
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/main.js"]
+CMD ["bun", "dist/main.js"]
