@@ -44,12 +44,52 @@ jobs:
 
             ${{ steps.get_diff.outputs.diff }}
 
+      - name: Debug Gemini Response
+        run: |
+          echo "🔍 Debugging Gemini Response Output"
+          echo "=================================="
+          echo "Response length: ${#RESPONSE} characters"
+          echo "Response content:"
+          echo "$RESPONSE"
+          echo "=================================="
+          
+          # Check if response is empty or contains only whitespace
+          if [[ -z "${RESPONSE// }" ]]; then
+            echo "⚠️  WARNING: Gemini response is empty!"
+            echo "response_status=empty" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Gemini response contains content"
+            echo "response_status=valid" >> $GITHUB_OUTPUT
+          fi
+        env:
+          RESPONSE: ${{ steps.gemini_review.outputs.gemini-response }}
+        id: debug_response
+
       - name: Post Review Comment
-        if: steps.gemini_review.outputs.gemini-response != 'No critical or high severity issues found.'
+        if: steps.gemini_review.outputs.gemini-response != 'No critical or high severity issues found.' && steps.debug_response.outputs.response_status == 'valid'
         uses: marocchino/sticky-pull-request-comment@v2
+        env:
+          GEMINI_RESPONSE: ${{ steps.gemini_review.outputs.gemini-response }}
         with:
           header: gemini-review
           message: |
             ### ✨ AI Review ✨
             
-            ${{ steps.gemini_review.outputs.gemini-response }}
+            ${{ env.GEMINI_RESPONSE }}
+
+      - name: Post Fallback Comment
+        if: steps.gemini_review.outputs.gemini-response != 'No critical or high severity issues found.' && steps.debug_response.outputs.response_status == 'empty'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: gemini-review
+          message: |
+            ### ⚠️ AI Review - Response Issue ⚠️
+            
+            The AI reviewer attempted to analyze this PR but the response was empty or malformed. 
+            
+            Please check the workflow logs for details. This may indicate:
+            - Complex markdown content causing YAML parsing issues
+            - API response timeout or formatting problems
+            - Output variable scoping issues
+            
+            **Action Required**: Manual code review recommended for this PR.
