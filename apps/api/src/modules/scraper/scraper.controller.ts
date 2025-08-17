@@ -4,7 +4,7 @@ import { ScraperService } from './scraper.service';
 
 // Controller for managing scraping operations
 
-@Controller('api/v1/scraper')
+@Controller('scraper')
 export class ScraperController {
   private readonly logger = new Logger(ScraperController.name);
 

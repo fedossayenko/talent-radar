@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
+import { ConfigModule } from '@nestjs/config';
 import { ScraperService } from './scraper.service';
 import { DevBgScraper } from './scrapers/dev-bg.scraper';
 import { ScraperProcessor } from './processors/scraper.processor';
@@ -11,9 +12,11 @@ import { TechPatternService } from './services/tech-pattern.service';
 import { VacancyModule } from '../vacancy/vacancy.module';
 import { CompanyModule } from '../company/company.module';
 import { DatabaseModule } from '../../common/database/database.module';
+import scraperConfig from '../../config/scraper.config';
 
 @Module({
   imports: [
+    ConfigModule.forFeature(scraperConfig),
     DatabaseModule,
     VacancyModule,
     CompanyModule,

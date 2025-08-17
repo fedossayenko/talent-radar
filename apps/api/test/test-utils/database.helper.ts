@@ -40,37 +40,37 @@ export class DatabaseHelper {
       // Use try-catch for each table to handle missing tables gracefully
       try {
         await this.prisma.application.deleteMany();
-      } catch (_error) {
+      } catch {
         // Table might not exist yet, ignore
       }
 
       try {
         await this.prisma.vacancyScore.deleteMany();
-      } catch (_error) {
+      } catch {
         // Table might not exist yet, ignore
       }
 
       try {
         await this.prisma.vacancy.deleteMany();
-      } catch (_error) {
+      } catch {
         // Table might not exist yet, ignore
       }
 
       try {
         await this.prisma.companyAnalysis.deleteMany();
-      } catch (_error) {
+      } catch {
         // Table might not exist yet, ignore
       }
 
       try {
         await this.prisma.company.deleteMany();
-      } catch (_error) {
+      } catch {
         // Table might not exist yet, ignore
       }
 
       try {
         await this.prisma.cV.deleteMany();
-      } catch (_error) {
+      } catch {
         // Table might not exist yet, ignore
       }
     } catch (error) {

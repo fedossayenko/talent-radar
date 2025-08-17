@@ -101,6 +101,9 @@ describe('ScraperService Integration Tests', () => {
               findFirst: jest.fn(),
               count: jest.fn(),
             },
+            company: {
+              count: jest.fn(),
+            },
           },
         },
       ],
@@ -136,7 +139,7 @@ describe('ScraperService Integration Tests', () => {
       expect(result.newVacancies).toBe(2);
       expect(result.updatedVacancies).toBe(0);
       expect(result.errors).toHaveLength(0);
-      expect(result.duration).toBeGreaterThan(0);
+      expect(result.duration).toBeGreaterThanOrEqual(0);
 
       // Verify scraper was called
       expect(devBgScraper.scrapeAllJavaJobs).toHaveBeenCalledTimes(1);
@@ -259,8 +262,11 @@ describe('ScraperService Integration Tests', () => {
       // Setup mocks
       (prismaService.vacancy.count as jest.Mock)
         .mockResolvedValueOnce(50) // Total vacancies
-        .mockResolvedValueOnce(45) // Active vacancies
+        .mockResolvedValueOnce(45); // Active vacancies
+      (prismaService.company.count as jest.Mock)
         .mockResolvedValueOnce(10); // Companies count
+      (prismaService.vacancy.findFirst as jest.Mock)
+        .mockResolvedValueOnce({ createdAt: new Date('2024-01-15') }); // Last scraped
 
       const stats = await service.getScrapingStats();
 

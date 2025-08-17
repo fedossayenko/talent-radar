@@ -96,8 +96,8 @@
       "json",
       "ts"
     ],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
+    "rootDir": ".",
+    "testRegex": "(src|test)/.*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
@@ -127,7 +127,7 @@
     },
     "testEnvironment": "node",
     "setupFilesAfterEnv": [
-      "<rootDir>/../test/test-utils/setup-e2e.ts"
+      "<rootDir>/test/test-utils/setup-e2e.ts"
     ]
   }
 }
