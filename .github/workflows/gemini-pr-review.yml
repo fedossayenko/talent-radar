@@ -14,13 +14,13 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed to fetch history for git diff
 
       - name: Get PR Diff
         id: get_diff
         run: |
-          PR_DIFF_URL="${{ github.event.pull_request.diff_url }}"
-          echo "Fetching diff from $PR_DIFF_URL"
-          DIFF=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$PR_DIFF_URL")
+          DIFF=$(git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           echo "diff<<EOF" >> $GITHUB_OUTPUT
           echo "$DIFF" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -39,7 +39,8 @@ jobs:
           RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL")
           
           # Check for errors from the API
-          if echo "$RESPONSE" | jq -e '.error' > /dev/null; then
+          if echo "$RESPONSE" | jq -e '.error' > /dev/null;
+            then
             echo "Error from Gemini API:"
             echo "$RESPONSE" | jq '.error'
             exit 1
