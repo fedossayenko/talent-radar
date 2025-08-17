@@ -12,8 +12,51 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: AI Code Review
-        uses: flux-actions/gemini-pr-reviewer@v1
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Get PR Diff
+        id: get_diff
+        run: |
+          PR_DIFF_URL="${{ github.event.pull_request.diff_url }}"
+          echo "Fetching diff from $PR_DIFF_URL"
+          DIFF=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$PR_DIFF_URL")
+          echo "diff<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Call Gemini API for Review
+        id: gemini_review
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          PROMPT="You are an expert software engineer reviewing a pull request. Please analyze the following code changes (in git diff format) and provide feedback. Focus on potential bugs, style issues, and adherence to best practices for a TypeScript monorepo. Structure your feedback clearly. Diff:
+
+${{ steps.get_diff.outputs.diff }}"
+          API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$GEMINI_API_KEY"
+          
+          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
+
+          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL")
+          
+          # Check for errors from the API
+          if echo "$RESPONSE" | jq -e '.error' > /dev/null; then
+            echo "Error from Gemini API:"
+            echo "$RESPONSE" | jq '.error'
+            exit 1
+          fi
+
+          REVIEW_COMMENT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+          
+          echo "comment<<EOF" >> $GITHUB_OUTPUT
+          echo "$REVIEW_COMMENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post Review Comment
+        uses: marocchino/sticky-pull-request-comment@v2
         with:
-          gemini-key: ${{ secrets.GEMINI_API_KEY }}
+          header: gemini-review
+          message: |
+            ### ✨ AI Review ✨
+            
+            ${{ steps.gemini_review.outputs.comment }}

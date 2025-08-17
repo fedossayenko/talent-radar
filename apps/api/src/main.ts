@@ -9,7 +9,7 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
-  // Adding a comment to test the AI reviewer
+  // Adding a second comment to re-trigger the AI reviewer workflow
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3001);
