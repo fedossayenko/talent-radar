@@ -37,7 +37,7 @@ export class HtmlCleanerService {
       description: 'Optimized for job vacancy and career-related content',
       selectors: {
         remove: [
-          // Navigation and UI elements
+           // Navigation and UI elements
           'nav', 'header', 'footer', 'aside', '.sidebar',
           '.navigation', '.menu', '.breadcrumb',
           
@@ -96,7 +96,7 @@ export class HtmlCleanerService {
           /we use cookies|accept.*cookies|cookie.*preferences/gi,
           
           // Navigation text
-          /home\s*[>\|]\s*|breadcrumb|skip to|go to/gi,
+          /home\s*[>|]\s*|breadcrumb|skip to|go to/gi,
           
           // Social media calls-to-action
           /follow us|like us|share this|tweet this|connect with us/gi,
@@ -353,7 +353,7 @@ export class HtmlCleanerService {
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
-    } catch (error) {
+    } catch {
       this.logger.warn('Fallback text extraction failed');
       return '';
     }

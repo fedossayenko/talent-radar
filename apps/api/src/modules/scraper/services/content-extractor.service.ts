@@ -384,7 +384,7 @@ export class ContentExtractorService {
         .replace(/<[^>]+>/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
-    } catch (error) {
+    } catch {
       this.logger.warn('Fallback text extraction failed, returning empty string');
       return '';
     }

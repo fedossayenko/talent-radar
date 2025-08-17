@@ -405,7 +405,7 @@ export class ScraperProcessor {
   /**
    * Process a single URL for batch processing
    */
-  private async processSingleUrl(url: string, batchData: BatchProcessingJobData): Promise<void> {
+  private async processSingleUrl(_url: string, _batchData: BatchProcessingJobData): Promise<void> {
     // This is a placeholder - you would implement actual scraping logic here
     // For example:
     // 1. Fetch the page content

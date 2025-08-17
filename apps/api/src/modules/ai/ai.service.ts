@@ -335,13 +335,10 @@ export class AiService {
    * This should be called once after the hashing unification to clean up inconsistent cache entries
    */
   async invalidateOldHashedCache(): Promise<{ invalidated: number; errors: number }> {
-    let invalidated = 0;
+    const invalidated = 0;
     let errors = 0;
     
     try {
-      // Scan for old cache keys with the vacancy_extraction prefix
-      const cachePattern = 'vacancy_extraction:*';
-      
       // Note: This is a simplified implementation
       // In production, you might want to scan in batches for large cache sets
       this.logger.log('Starting cache invalidation for old hashed entries...');
