@@ -70,17 +70,16 @@ jobs:
       - name: Triage and Fix Lint Errors
         if: steps.lint.outcome == 'failure'
         id: ai_lint_triage
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          LINT_ERRORS=$(cat lint_errors.log)
-          PROMPT_TEMPLATE=$(cat .github/workflows/lint-fix.prompt)
-          PROMPT="$PROMPT_TEMPLATE\n\n**Errors**:\n$LINT_ERRORS"
-          
-          API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
-          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
-          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL" | jq -r '.candidates[0].content.parts[0].text')
+        uses: neondatabase/run-gemini-cli@v1
+        with:
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+          prompt-file: .github/workflows/lint-fix.prompt
+          prompt: "Errors: ${{ steps.lint.outputs.lint_errors }}"
 
+      - name: Handle Gemini Response
+        if: steps.ai_lint_triage.outputs.gemini-response
+        run: |
+          RESPONSE="${{ steps.ai_lint_triage.outputs.gemini-response }}"
           if [[ $(echo "$RESPONSE" | head -n 1) == "AUTOMATIC_FIX:" ]]; then
             echo "AI provided an automatic fix."
             FIX_COMMANDS=$(echo "$RESPONSE" | tail -n +2)
