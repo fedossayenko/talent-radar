@@ -54,9 +54,15 @@ jobs:
           # Set API key as environment variable
           export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
           
-          # Create request payload using printf to avoid HEREDOC issues  
+          # Create request payload using echo commands to avoid quoting issues
           PROMPT_CONTENT=$(cat prompt.txt | sed 's/"/\\"/g' | awk '{printf "%s\\n", $0}' | sed 's/\\n$//')
-          printf '{\n  "contents": [{\n    "parts": [{\n      "text": "%s"\n    }]\n  }]\n}' "$PROMPT_CONTENT" > request.json
+          echo "{" > request.json
+          echo '  "contents": [{' >> request.json
+          echo '    "parts": [{' >> request.json
+          echo "      \"text\": \"$PROMPT_CONTENT\"" >> request.json
+          echo '    }]' >> request.json
+          echo '  }]' >> request.json
+          echo "}" >> request.json
           
           # Call Gemini API directly using curl
           if curl -s -H "Content-Type: application/json" \
