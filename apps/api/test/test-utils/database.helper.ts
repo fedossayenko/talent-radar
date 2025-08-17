@@ -18,7 +18,7 @@ export class DatabaseHelper {
       
       // Simple approach: use db push to ensure schema is up to date
       try {
-        execSync('npx prisma db push --force-reset --skip-generate', { 
+        execSync('bunx prisma db push --force-reset --skip-generate', { 
           stdio: 'inherit',
           timeout: 30000
         });

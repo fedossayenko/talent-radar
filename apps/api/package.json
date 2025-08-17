@@ -20,10 +20,11 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "type-check": "tsc --noEmit --project tsconfig.build.json",
-    "db:generate": "npx prisma generate",
-    "db:migrate": "npx prisma migrate dev",
-    "db:studio": "npx prisma studio",
-    "db:seed": "npx prisma db seed"
+    "db:generate": "bunx prisma generate",
+    "db:migrate": "bunx prisma migrate dev",
+    "db:studio": "bunx prisma studio",
+    "db:seed": "bunx prisma db seed",
+    "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
   "dependencies": {
     "@nestjs/bull": "^10.0.1",
@@ -65,7 +66,6 @@
     "@nestjs/cli": "^10.0.0",
     "@nestjs/schematics": "^10.0.0",
     "@nestjs/testing": "^10.0.0",
-    "@types/cheerio": "^1.0.0",
     "@types/compression": "^1.7.5",
     "@types/cookie-parser": "^1.4.6",
     "@types/express": "^4.17.17",
