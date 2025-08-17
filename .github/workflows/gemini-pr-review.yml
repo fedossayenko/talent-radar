@@ -27,22 +27,37 @@ jobs:
 
       - name: Call Gemini API for Review
         id: gemini_review
-        uses: google-github-actions/run-gemini-cli@main
-        with:
-          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          prompt: |
-            You are an AI code reviewer. Your task is to analyze the provided git diff and identify only the most severe issues.
+        run: |
+          # Write prompt to a temporary file to handle complex content
+          cat > prompt.txt << 'EOF'
+          You are an AI code reviewer. Your task is to analyze the provided git diff and identify only the most severe issues.
 
-            **Instructions:**
-            1.  **Focus only on `critical` and `high` severity suggestions.** Do not report medium or low-severity issues like style conventions or minor nitpicks.
-            2.  **You MUST use one of the following severity levels for your findings:**
-                *   `critical`: A potential bug, security vulnerability, or major performance issue.
-                *   `high`: A major design or architectural issue.
-            3.  **Provide context.** For each suggestion, specify the file and line number if possible.
-            4.  **Be concise.** Keep your suggestions and reasoning brief and to the point.
-            5.  **If you find no critical or high issues, you MUST respond with the single phrase `No critical or high severity issues found.`**
+          **Instructions:**
+          1.  **Focus only on `critical` and `high` severity suggestions.** Do not report medium or low-severity issues like style conventions or minor nitpicks.
+          2.  **You MUST use one of the following severity levels for your findings:**
+              *   `critical`: A potential bug, security vulnerability, or major performance issue.
+              *   `high`: A major design or architectural issue.
+          3.  **Provide context.** For each suggestion, specify the file and line number if possible.
+          4.  **Be concise.** Keep your suggestions and reasoning brief and to the point.
+          5.  **If you find no critical or high issues, you MUST respond with the single phrase `No critical or high severity issues found.`**
 
-            ${{ steps.get_diff.outputs.diff }}
+          ${{ steps.get_diff.outputs.diff }}
+          EOF
+          
+          # Install and run Gemini CLI directly
+          npm install -g @google/gemini-cli@latest
+          
+          # Run Gemini and capture output
+          gemini-cli --api-key="${{ secrets.GEMINI_API_KEY }}" --prompt="$(cat prompt.txt)" > gemini_response.txt 2>&1
+          
+          # Read the response and set output
+          GEMINI_RESPONSE=$(cat gemini_response.txt)
+          echo "gemini-response<<EOF" >> $GITHUB_OUTPUT
+          echo "$GEMINI_RESPONSE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
+          # Clean up
+          rm -f prompt.txt gemini_response.txt
 
       - name: Debug Gemini Response
         run: |

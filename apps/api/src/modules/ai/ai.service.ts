@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
-import * as crypto from 'crypto-js';
 import { RedisService } from '../../common/redis/redis.service';
+import { HashingUtil } from '../../common/utils/hashing.util';
 
 export interface VacancyExtractionResult {
   title: string | null;
@@ -35,13 +35,6 @@ export interface VacancyExtractionResult {
   };
 }
 
-export interface ContentHashingOptions {
-  url: string;
-  content: string;
-  useUrlHashing?: boolean;
-  useContentHashing?: boolean;
-  cleanBeforeHash?: boolean;
-}
 
 @Injectable()
 export class AiService {
@@ -79,8 +72,8 @@ export class AiService {
     options: { skipCache?: boolean } = {},
   ): Promise<VacancyExtractionResult | null> {
     try {
-      // Generate content hash for caching
-      const contentHash = this.generateContentHash({
+      // Generate content hash for caching using unified utility
+      const contentHash = HashingUtil.generateContentHash({
         url: sourceUrl,
         content: content,
         useUrlHashing: this.config.contentHashing.enableUrlHashing,
@@ -200,38 +193,6 @@ export class AiService {
     }
   }
 
-  /**
-   * Generate content hash for caching
-   */
-  private generateContentHash(options: ContentHashingOptions): string {
-    const { url, content, useUrlHashing = true, useContentHashing = true, cleanBeforeHash = true } = options;
-    
-    let hashInput = '';
-    
-    if (useUrlHashing) {
-      // Extract meaningful parts of URL (remove query params, fragments)
-      const cleanUrl = url.split('?')[0].split('#')[0];
-      hashInput += cleanUrl;
-    }
-    
-    if (useContentHashing) {
-      let contentToHash = content;
-      
-      if (cleanBeforeHash) {
-        // Basic content cleaning for hashing
-        contentToHash = content
-          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove scripts
-          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '') // Remove styles
-          .replace(/<!--[\s\S]*?-->/g, '') // Remove comments
-          .replace(/\s+/g, ' ') // Normalize whitespace
-          .trim();
-      }
-      
-      hashInput += contentToHash;
-    }
-    
-    return crypto.SHA256(hashInput).toString();
-  }
 
   /**
    * Optimize content for token efficiency
@@ -367,6 +328,35 @@ export class AiService {
    */
   isConfigured(): boolean {
     return !!this.config?.openai?.apiKey && !!this.openai;
+  }
+
+  /**
+   * Invalidate cache entries created with old hashing algorithm
+   * This should be called once after the hashing unification to clean up inconsistent cache entries
+   */
+  async invalidateOldHashedCache(): Promise<{ invalidated: number; errors: number }> {
+    let invalidated = 0;
+    let errors = 0;
+    
+    try {
+      // Scan for old cache keys with the vacancy_extraction prefix
+      const cachePattern = 'vacancy_extraction:*';
+      
+      // Note: This is a simplified implementation
+      // In production, you might want to scan in batches for large cache sets
+      this.logger.log('Starting cache invalidation for old hashed entries...');
+      
+      // This would require implementing a way to identify old vs new hash formats
+      // For now, we'll log the action for manual intervention if needed
+      this.logger.warn('Cache invalidation requires manual intervention or a background job to identify old hash formats');
+      
+      return { invalidated, errors };
+      
+    } catch (error) {
+      this.logger.error('Failed to invalidate old hashed cache entries:', error.message);
+      errors++;
+      return { invalidated, errors };
+    }
   }
 
   /**

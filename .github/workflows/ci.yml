@@ -177,15 +177,20 @@ jobs:
             
             echo "fix_type=manual" >> $GITHUB_OUTPUT
             
-            FALLBACK_TEXT="🤖 **AI Response Analysis Required**
+            read -r -d '' FALLBACK_TEXT << 'EOF'
+🤖 **AI Response Analysis Required**
 
 The AI provided a response but not in the expected format. Please review the full output below and apply fixes manually if needed:
 
-\`\`\`
-${RESPONSE}
-\`\`\`
+```
+EOF
+            FALLBACK_TEXT="${FALLBACK_TEXT}${RESPONSE}"
+            read -r -d '' FALLBACK_SUFFIX << 'EOF'
+```
 
-*This typically happens when the AI provides explanatory text before the fix commands. Look for actionable commands in the response above.*"
+*This typically happens when the AI provides explanatory text before the fix commands. Look for actionable commands in the response above.*
+EOF
+            FALLBACK_TEXT="${FALLBACK_TEXT}${FALLBACK_SUFFIX}"
             
             echo "suggestion_text<<EOF" >> $GITHUB_OUTPUT
             echo "$FALLBACK_TEXT" >> $GITHUB_OUTPUT

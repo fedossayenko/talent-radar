@@ -5,6 +5,7 @@ import * as Bull from 'bull';
 import { AllJobData, AiExtractionJobData, BatchProcessingJobData } from './processors/scraper.processor';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import { HashingUtil } from '../../common/utils/hashing.util';
 
 @Injectable()
 export class ScraperScheduler {
@@ -227,9 +228,8 @@ export class ScraperScheduler {
       delay = 0 
     } = options;
 
-    // Generate content hash for caching
-    const crypto = await import('crypto');
-    const contentHash = crypto.createHash('sha256').update(content).digest('hex');
+    // Generate content hash for caching using unified utility
+    const contentHash = HashingUtil.generateSimpleContentHash(content, false);
 
     this.logger.log(`Scheduling AI extraction job`, {
       vacancyId,
