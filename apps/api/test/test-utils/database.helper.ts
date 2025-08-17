@@ -9,19 +9,23 @@ export class DatabaseHelper {
       this.prisma = new PrismaClient({
         datasources: {
           db: {
-            url: process.env.DATABASE_URL || 'file:./test/tmp/test.db',
+            url: process.env.DATABASE_URL || 'file:./test.db',
           },
         },
       });
 
       await this.prisma.$connect();
       
-      // Run migrations if needed
+      // Simple approach: use db push to ensure schema is up to date
       try {
-        execSync('npx prisma db push --force-reset', { stdio: 'inherit' });
+        execSync('bunx prisma db push --force-reset --skip-generate', { 
+          stdio: 'inherit',
+          timeout: 30000
+        });
       } catch (error) {
         // eslint-disable-next-line no-console
-        console.warn('Migration warning:', error);
+        console.warn('Database migration warning:', error.message);
+        // Continue anyway - tables might already exist
       }
     }
 
@@ -31,13 +35,48 @@ export class DatabaseHelper {
   static async clearDatabase(): Promise<void> {
     if (!this.prisma) return;
 
-    // Clear all tables in the correct order for SQLite (respecting foreign key constraints)
-    await this.prisma.application.deleteMany();
-    await this.prisma.vacancyScore.deleteMany();
-    await this.prisma.vacancy.deleteMany();
-    await this.prisma.companyAnalysis.deleteMany();
-    await this.prisma.company.deleteMany();
-    await this.prisma.cV.deleteMany();
+    try {
+      // Clear all tables in the correct order for SQLite (respecting foreign key constraints)
+      // Use try-catch for each table to handle missing tables gracefully
+      try {
+        await this.prisma.application.deleteMany();
+      } catch {
+        // Table might not exist yet, ignore
+      }
+
+      try {
+        await this.prisma.vacancyScore.deleteMany();
+      } catch {
+        // Table might not exist yet, ignore
+      }
+
+      try {
+        await this.prisma.vacancy.deleteMany();
+      } catch {
+        // Table might not exist yet, ignore
+      }
+
+      try {
+        await this.prisma.companyAnalysis.deleteMany();
+      } catch {
+        // Table might not exist yet, ignore
+      }
+
+      try {
+        await this.prisma.company.deleteMany();
+      } catch {
+        // Table might not exist yet, ignore
+      }
+
+      try {
+        await this.prisma.cV.deleteMany();
+      } catch {
+        // Table might not exist yet, ignore
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.warn('Database clearing warning:', error.message);
+    }
   }
 
   static async seedTestData(): Promise<void> {
@@ -94,6 +133,7 @@ export class DatabaseHelper {
   static async closeDatabase(): Promise<void> {
     if (this.prisma) {
       await this.prisma.$disconnect();
+      this.prisma = null;
     }
   }
 
