@@ -54,28 +54,19 @@ jobs:
           # Set API key as environment variable
           export GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}"
           
-          # Properly escape content for JSON using jq or python
+          # Properly escape content for JSON using jq or node
           if command -v jq >/dev/null 2>&1; then
             # Use jq to properly escape JSON
             PROMPT_CONTENT=$(cat prompt.txt)
             echo '{"contents":[{"parts":[{"text":""}]}]}' | jq --arg text "$PROMPT_CONTENT" '.contents[0].parts[0].text = $text' > request.json
           else
-            # Fallback: Use python for proper JSON escaping
-            python3 -c "
-import json
-import sys
-with open('prompt.txt', 'r') as f:
-    content = f.read()
-payload = {
-    'contents': [{
-        'parts': [{
-            'text': content
-        }]
-    }]
-}
-with open('request.json', 'w') as f:
-    json.dump(payload, f)
-"
+            # Fallback: Use node.js for JSON escaping (create script file first)
+            echo "const fs = require('fs');" > json_creator.js
+            echo "const content = fs.readFileSync('prompt.txt', 'utf8');" >> json_creator.js
+            echo "const payload = {contents: [{parts: [{text: content}]}]};" >> json_creator.js
+            echo "fs.writeFileSync('request.json', JSON.stringify(payload));" >> json_creator.js
+            node json_creator.js
+            rm json_creator.js
           fi
           
           # Call Gemini API directly using curl
