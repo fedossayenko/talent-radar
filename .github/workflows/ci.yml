@@ -63,7 +63,47 @@ jobs:
           DATABASE_URL: file:./test/tmp/ci-test.db
 
       - name: Lint code
+        id: lint
+        continue-on-error: true
         run: bun run lint
+
+      - name: Auto-fix Lint Errors with AI
+        if: failure() && steps.lint.outcome == 'failure'
+        id: ai_fix
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          LINT_ERRORS="${{ steps.lint.outputs.stdout }}${{ steps.lint.outputs.stderr }}"
+          PROMPT="You are an expert programmer tasked with fixing linting errors. Based on the following errors, provide a series of shell commands, primarily using 'sed', to fix the files directly. Output ONLY the shell commands. If you cannot find a fix, output 'No fix found'.\n\nErrors:\n$LINT_ERRORS"
+          
+          API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$GEMINI_API_KEY"
+          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
+          FIX_COMMANDS=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL" | jq -r '.candidates[0].content.parts[0].text')
+
+          if [[ "$FIX_COMMANDS" == "No fix found" ]]; then
+            echo "AI could not determine a fix."
+            exit 1
+          fi
+
+          echo "Applying AI-generated fixes..."
+          eval "$FIX_COMMANDS"
+          echo "applied_fix=true" >> $GITHUB_OUTPUT
+
+      - name: Verify and Commit Fix
+        if: steps.ai_fix.outputs.applied_fix == 'true'
+        run: |
+          echo "Verifying AI fix by re-running the linter..."
+          if ! bun run lint; then
+            echo "AI fix did not resolve linting errors. Failing workflow."
+            exit 1
+          fi
+          
+          echo "Linting errors fixed successfully. Committing changes..."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore(ci): apply automatic linting fixes"
+          git push
 
       - name: Type check
         run: bun run type-check
@@ -130,16 +170,3 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t talent-radar-api:test -f apps/api/Dockerfile .
-
-#      - name: Test Docker image
-#        run: |
-#          docker run --rm -d --name test-api -p 3001:3000 \
-#            --network host \
-#            -e DATABASE_URL="file:./test.db" \
-#            -e PORT=3000 \
-#            -e NODE_ENV=test \
-#            -e REDIS_URL="redis://localhost:6379" \
-#            talent-radar-api:test
-#          sleep 20
-#          curl -f http://localhost:3001/api/v1/health || exit 1
-#          docker stop test-api
