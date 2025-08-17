@@ -81,6 +81,7 @@ jobs:
           prompt: "Errors: ${{ steps.lint.outputs.lint_errors }}"
 
       - name: Handle Gemini Response
+        id: handle_gemini_response
         if: steps.lint.outcome == 'failure'
         run: |
           RESPONSE="${{ steps.ai_lint_triage.outputs.gemini-response }}"
@@ -109,7 +110,7 @@ jobs:
           message: ${{ steps.ai_lint_triage.outputs.comment_body }}
 
       - name: Verify and Commit Lint Fix
-        if: steps.ai_lint_triage.outputs.fix_type == 'code'
+        if: steps.handle_gemini_response.outputs.fix_type == 'code'
         run: |
           echo "Verifying AI fix by re-running the linter..."
           if ! bun run lint; then
