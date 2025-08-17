@@ -136,6 +136,11 @@ logs/
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
+
+# Redis
+dump.rdb
+*.rdb
 
 # Uploads
 uploads/
