@@ -65,7 +65,7 @@ jobs:
       - name: Lint code
         id: lint
         continue-on-error: true
-        run: bun run lint
+        run: bun run lint > lint_errors.log 2>&1
 
       - name: Auto-fix Lint Errors with AI
         if: failure() && steps.lint.outcome == 'failure'
@@ -73,7 +73,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          LINT_ERRORS="${{ steps.lint.outputs.stdout }}${{ steps.lint.outputs.stderr }}"
+          LINT_ERRORS=$(cat lint_errors.log)
           PROMPT="You are an expert programmer tasked with fixing linting errors. Based on the following errors, provide a series of shell commands, primarily using 'sed', to fix the files directly. Output ONLY the shell commands. If you cannot find a fix, output 'No fix found'.\n\nErrors:\n$LINT_ERRORS"
           
           API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
@@ -93,7 +93,8 @@ jobs:
         if: steps.ai_lint_fix.outputs.applied_fix == 'true'
         run: |
           echo "Verifying AI fix by re-running the linter..."
-          if ! bun run lint; then
+          if ! bun run lint;
+            then
             echo "AI fix did not resolve linting errors. Failing workflow."
             exit 1
           fi
@@ -151,7 +152,7 @@ jobs:
       - name: Run security audit
         id: bun_audit
         continue-on-error: true
-        run: bun audit
+        run: bun audit > bun_audit.log 2>&1
 
       - name: Run dependency review
         id: dep_review
@@ -160,14 +161,13 @@ jobs:
         if: github.event_name == 'pull_request'
 
       - name: Auto-fix Security Issues with AI
-        if: steps.bun_audit.outcome == 'failure' || steps.dep_review.outcome == 'failure'
+        if: steps.bun_audit.outcome == 'failure' # Temporarily simplified to just bun_audit
         id: ai_security_fix
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          BUN_AUDIT_ERRORS: ${{ steps.bun_audit.outputs.stdout }}${{ steps.bun_audit.outputs.stderr }}
-          DEP_REVIEW_ERRORS: ${{ steps.dep_review.outputs.stdout }}${{ steps.dep_review.outputs.stderr }}
         run: |
-          PROMPT="You are a cybersecurity expert. The following security checks failed. Analyze all reports and provide a consolidated series of 'bun update <package>' commands to fix all vulnerabilities. Only output the shell commands. If no fix is possible, output 'No fix found'.\n\nBUN AUDIT REPORT:\n$BUN_AUDIT_ERRORS\n\nDEPENDENCY REVIEW REPORT:\n$DEP_REVIEW_ERRORS"
+          AUDIT_ERRORS=$(cat bun_audit.log)
+          PROMPT="You are a cybersecurity expert. The following 'bun audit' command found vulnerabilities. Provide a series of 'bun update <package>' commands to fix them. Only output the shell commands. If no fix is possible, output 'No fix found'.\n\nAudit Report:\n$AUDIT_ERRORS"
           
           API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
           JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
@@ -185,18 +185,11 @@ jobs:
       - name: Verify and Commit Security Fix
         if: steps.ai_security_fix.outputs.applied_fix == 'true'
         run: |
-          echo "Verifying AI fix by re-running security checks..."
-          # Re-run bun audit
-          if ! bun audit; then
+          echo "Verifying AI fix by re-running security audit..."
+          if ! bun audit;
+            then
             echo "AI fix did not resolve bun audit issues. Failing workflow."
             exit 1
-          fi
-          # Re-run dependency review if it was the one that failed
-          if [[ "${{ steps.dep_review.outcome }}" == "failure" ]]; then
-            if ! actions/dependency-review-action@v4; then
-              echo "AI fix did not resolve dependency review issues. Failing workflow."
-              exit 1
-            fi
           fi
           
           echo "Security issues fixed successfully. Committing changes..."
