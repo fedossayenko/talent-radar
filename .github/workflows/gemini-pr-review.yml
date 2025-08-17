@@ -45,13 +45,29 @@ jobs:
           EOF
           
           # Install and run Gemini CLI directly
+          echo "🚀 Installing Gemini CLI..."
           npm install -g @google/gemini-cli@latest
           
-          # Run Gemini and capture output
-          gemini-cli --api-key="${{ secrets.GEMINI_API_KEY }}" --prompt="$(cat prompt.txt)" > gemini_response.txt 2>&1
+          # Run Gemini and capture output with error handling
+          echo "🔍 Running Gemini analysis..."
+          if gemini-cli --api-key="${{ secrets.GEMINI_API_KEY }}" --prompt="$(cat prompt.txt)" > gemini_response.txt 2>&1; then
+            echo "✅ Gemini CLI completed successfully"
+          else
+            echo "❌ Gemini CLI failed with exit code $?"
+            echo "Error output:"
+            cat gemini_response.txt
+          fi
+          
+          # Debug: Show raw response file content
+          echo "📄 Raw response file size: $(wc -c < gemini_response.txt) bytes"
+          echo "📄 Raw response content:"
+          cat gemini_response.txt
+          echo "📄 End of raw response"
           
           # Read the response and set output
           GEMINI_RESPONSE=$(cat gemini_response.txt)
+          echo "📝 Setting output variable with ${#GEMINI_RESPONSE} characters"
+          
           echo "gemini-response<<EOF" >> $GITHUB_OUTPUT
           echo "$GEMINI_RESPONSE" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -60,12 +76,18 @@ jobs:
           rm -f prompt.txt gemini_response.txt
 
       - name: Debug Gemini Response
+        id: debug_response
+        env:
+          RESPONSE: ${{ steps.gemini_review.outputs.gemini-response }}
         run: |
           echo "🔍 Debugging Gemini Response Output"
           echo "=================================="
           echo "Response length: ${#RESPONSE} characters"
-          echo "Response content:"
-          echo "$RESPONSE"
+          echo "Response preview (first 200 chars):"
+          echo "${RESPONSE:0:200}"
+          if [[ ${#RESPONSE} -gt 200 ]]; then
+            echo "... (truncated, total ${#RESPONSE} characters)"
+          fi
           echo "=================================="
           
           # Check if response is empty or contains only whitespace
@@ -73,12 +95,9 @@ jobs:
             echo "⚠️  WARNING: Gemini response is empty!"
             echo "response_status=empty" >> $GITHUB_OUTPUT
           else
-            echo "✅ Gemini response contains content"
+            echo "✅ Gemini response contains content (${#RESPONSE} characters)"
             echo "response_status=valid" >> $GITHUB_OUTPUT
           fi
-        env:
-          RESPONSE: ${{ steps.gemini_review.outputs.gemini-response }}
-        id: debug_response
 
       - name: Post Review Comment
         if: steps.gemini_review.outputs.gemini-response != 'No critical or high severity issues found.' && steps.debug_response.outputs.response_status == 'valid'
