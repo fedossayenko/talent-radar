@@ -9,7 +9,7 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  var app = await NestFactory.create(AppModule, { // Deliberate lint error
     logger: WinstonModule.createLogger(loggerConfig),
   });
 

@@ -1,0 +1,62 @@
+name: AI PR Reviewer
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed to fetch history for git diff
+
+      - name: Get PR Diff
+        id: get_diff
+        run: |
+          DIFF=$(git diff ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          echo "diff<<EOF" >> $GITHUB_OUTPUT
+          echo "$DIFF" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Call Gemini API for Review
+        id: gemini_review
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          DIFF: ${{ steps.get_diff.outputs.diff }}
+        run: |
+          PROMPT_TEMPLATE=$(cat .github/workflows/pr-review.prompt)
+          PROMPT="$PROMPT_TEMPLATE\n\n**Git Diff to review:**\n$DIFF"
+
+          API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$GEMINI_API_KEY"
+          
+          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
+
+          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL")
+          
+          if echo "$RESPONSE" | jq -e '.error' > /dev/null; then
+            echo "Error from Gemini API:"
+            echo "$RESPONSE" | jq '.error'
+            exit 1
+          fi
+
+          REVIEW_COMMENT=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[0].text')
+          
+          echo "comment<<EOF" >> $GITHUB_OUTPUT
+          echo "$REVIEW_COMMENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post Review Comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: gemini-review
+          message: |
+            ### ✨ AI Review ✨
+            
+            ${{ steps.gemini_review.outputs.comment }}

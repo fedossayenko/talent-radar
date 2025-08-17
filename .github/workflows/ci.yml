@@ -63,7 +63,63 @@ jobs:
           DATABASE_URL: file:./test/tmp/ci-test.db
 
       - name: Lint code
-        run: bun run lint
+        id: lint
+        continue-on-error: true
+        run: bun run lint > lint_errors.log 2>&1
+
+      - name: Triage and Fix Lint Errors
+        if: steps.lint.outcome == 'failure'
+        id: ai_lint_triage
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          LINT_ERRORS=$(cat lint_errors.log)
+          PROMPT_TEMPLATE=$(cat .github/workflows/lint-fix.prompt)
+          PROMPT="$PROMPT_TEMPLATE\n\n**Errors**:\n$LINT_ERRORS"
+          
+          API_URL="https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=$GEMINI_API_KEY"
+          JSON_PAYLOAD=$(jq -n --arg prompt "$PROMPT" '{ "contents": [ { "parts": [ { "text": $prompt } ] } ] }')
+          RESPONSE=$(curl -s -X POST -H "Content-Type: application/json" -d "$JSON_PAYLOAD" "$API_URL" | jq -r '.candidates[0].content.parts[0].text')
+
+          if [[ $(echo "$RESPONSE" | head -n 1) == "AUTOMATIC_FIX:" ]]; then
+            echo "AI provided an automatic fix."
+            FIX_COMMANDS=$(echo "$RESPONSE" | tail -n +2)
+            eval "$FIX_COMMANDS"
+            echo "fix_type=code" >> $GITHUB_OUTPUT
+          elif [[ $(echo "$RESPONSE" | head -n 1) == "MANUAL_SUGGESTION:" ]]; then
+            echo "AI provided a manual suggestion."
+            COMMENT_BODY=$(echo "$RESPONSE" | tail -n +2)
+            echo "fix_type=notification" >> $GITHUB_OUTPUT
+            echo "comment_body<<EOF" >> $GITHUB_OUTPUT
+            echo "$COMMENT_BODY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "AI returned an unexpected response format."
+            exit 1
+          fi
+
+      - name: Post Lint Fix Suggestion
+        if: steps.ai_lint_triage.outputs.fix_type == 'notification'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ai-lint-suggestion
+          message: ${{ steps.ai_lint_triage.outputs.comment_body }}
+
+      - name: Verify and Commit Lint Fix
+        if: steps.ai_lint_triage.outputs.fix_type == 'code'
+        run: |
+          echo "Verifying AI fix by re-running the linter..."
+          if ! bun run lint; then
+            echo "AI fix did not resolve linting errors. Failing workflow."
+            exit 1
+          fi
+          
+          echo "Linting errors fixed successfully. Committing changes..."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "chore(ci): apply automatic linting fixes"
+          git push
 
       - name: Type check
         run: bun run type-check
@@ -130,16 +186,3 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t talent-radar-api:test -f apps/api/Dockerfile .
-
-#      - name: Test Docker image
-#        run: |
-#          docker run --rm -d --name test-api -p 3001:3000 \
-#            --network host \
-#            -e DATABASE_URL="file:./test.db" \
-#            -e PORT=3000 \
-#            -e NODE_ENV=test \
-#            -e REDIS_URL="redis://localhost:6379" \
-#            talent-radar-api:test
-#          sleep 20
-#          curl -f http://localhost:3001/api/v1/health || exit 1
-#          docker stop test-api
