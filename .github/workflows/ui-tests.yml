@@ -32,13 +32,8 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Cache node_modules
         uses: actions/cache@v4
@@ -46,18 +41,18 @@ jobs:
           path: |
             node_modules
             apps/web/node_modules
-          key: ${{ runner.os }}-ui-deps-${{ hashFiles('**/package-lock.json', '**/bun.lockb') }}
+          key: ${{ runner.os }}-ui-deps-${{ hashFiles('**/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-ui-deps-
 
       - name: Lint web app
-        run: bun run lint:web
+        run: npm run lint:web
 
       - name: Type check web app
-        run: bun run type-check:web
+        run: npm run type-check:web
 
       - name: Run unit tests
-        run: bun run test:web
+        run: npm run test:web
         env:
           NODE_ENV: test
 
@@ -102,13 +97,8 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -135,26 +125,26 @@ jobs:
         run: mkdir -p apps/api/test/tmp
 
       - name: Generate Prisma Client
-        run: bun run db:generate
+        run: npm run db:generate
         env:
           DATABASE_URL: file:./test/tmp/e2e-test.db
 
       - name: Run database migrations
-        run: bun run db:migrate
+        run: npm run db:migrate
         env:
           DATABASE_URL: file:./test/tmp/e2e-test.db
 
       - name: Seed test database
-        run: bun run db:seed
+        run: npm run db:seed
         env:
           DATABASE_URL: file:./test/tmp/e2e-test.db
           NODE_ENV: test
 
       - name: Build web app
-        run: bun run build:web
+        run: npm run build:web
 
       - name: Run E2E tests
-        run: bun run test:e2e:web --project=${{ matrix.browser }}
+        run: npm run test:e2e:web --project=${{ matrix.browser }}
         env:
           DATABASE_URL: file:./test/tmp/e2e-test.db
           REDIS_URL: redis://localhost:6379
@@ -191,16 +181,11 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
-        with:
-          bun-version: latest
-
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Build web app
-        run: bun run build:web
+        run: npm run build:web
 
       - name: Check bundle size
         run: |
