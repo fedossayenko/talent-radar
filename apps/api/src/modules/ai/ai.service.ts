@@ -99,20 +99,30 @@ export class AiService {
         .replace('{sourceUrl}', sourceUrl);
 
       // Make API call
-      const response = await this.openai.chat.completions.create({
+      const apiCall: any = {
         model: this.config.models.scraping.vacancy,
         messages: [
           {
-            role: 'user',
+            role: 'user' as const,
             content: prompt,
           },
         ],
-        temperature: this.config.prompts.vacancyExtraction.temperature,
-        max_tokens: this.config.prompts.vacancyExtraction.maxTokens,
-        response_format: { type: 'json_object' },
-      });
+        max_completion_tokens: this.config.prompts.vacancyExtraction.maxTokens,
+      };
 
-      const extractedData = this.parseExtractionResponse(response.choices[0]?.message?.content);
+      // Model-specific configurations
+      const isGpt5Nano = this.config.models.scraping.vacancy.includes('gpt-5-nano');
+      
+      if (!isGpt5Nano) {
+        // Standard models support temperature and json_object format
+        apiCall.temperature = this.config.prompts.vacancyExtraction.temperature;
+        apiCall.response_format = { type: 'json_object' as const };
+      }
+      // GPT-5 Nano uses default temperature and doesn't support structured response format
+
+      const response = await this.openai.chat.completions.create(apiCall);
+
+      const extractedData = this.parseExtractionResponse(response.choices[0]?.message?.content, isGpt5Nano);
       
       if (!extractedData) {
         this.logger.warn('Failed to parse AI extraction response');
@@ -146,17 +156,23 @@ export class AiService {
       const prompt = this.config.prompts.contentCleaning.template
         .replace('{content}', content);
 
-      const response = await this.openai.chat.completions.create({
+      const apiCall: any = {
         model: this.config.models.scraping.contentCleaning,
         messages: [
           {
-            role: 'user',
+            role: 'user' as const,
             content: prompt,
           },
         ],
-        temperature: this.config.prompts.contentCleaning.temperature,
-        max_tokens: this.config.prompts.contentCleaning.maxTokens,
-      });
+        max_completion_tokens: this.config.prompts.contentCleaning.maxTokens,
+      };
+
+      // Only add temperature if the model supports it (GPT-5 Nano only supports default temperature)
+      if (!this.config.models.scraping.contentCleaning.includes('gpt-5-nano')) {
+        apiCall.temperature = this.config.prompts.contentCleaning.temperature;
+      }
+
+      const response = await this.openai.chat.completions.create(apiCall);
 
       return response.choices[0]?.message?.content || content;
     } catch (error) {
@@ -173,18 +189,26 @@ export class AiService {
       const prompt = this.config.prompts.qualityAssessment.template
         .replace('{content}', content);
 
-      const response = await this.openai.chat.completions.create({
+      const apiCall: any = {
         model: this.config.models.scraping.qualityAssessment,
         messages: [
           {
-            role: 'user',
+            role: 'user' as const,
             content: prompt,
           },
         ],
-        temperature: this.config.prompts.qualityAssessment.temperature,
-        max_tokens: this.config.prompts.qualityAssessment.maxTokens,
-        response_format: { type: 'json_object' },
-      });
+        max_completion_tokens: this.config.prompts.qualityAssessment.maxTokens,
+      };
+
+      // Model-specific configurations for quality assessment
+      const isGpt5Nano = this.config.models.scraping.qualityAssessment.includes('gpt-5-nano');
+      
+      if (!isGpt5Nano) {
+        apiCall.temperature = this.config.prompts.qualityAssessment.temperature;
+        apiCall.response_format = { type: 'json_object' as const };
+      }
+
+      const response = await this.openai.chat.completions.create(apiCall);
 
       return JSON.parse(response.choices[0]?.message?.content || '{}');
     } catch (error) {
@@ -267,21 +291,78 @@ export class AiService {
   /**
    * Parse AI extraction response
    */
-  private parseExtractionResponse(response: string | undefined): VacancyExtractionResult | null {
+  private parseExtractionResponse(response: string | undefined, isUnstructuredModel: boolean = false): VacancyExtractionResult | null {
     if (!response) return null;
 
     try {
-      const parsed = JSON.parse(response);
+      // Log the raw response for debugging
+      this.logger.debug('Raw AI response:', response);
+      
+      let parsed: any;
+      
+      if (isUnstructuredModel) {
+        // For models like GPT-5 Nano that don't support structured output
+        // Try to extract JSON from the response text
+        parsed = this.extractJsonFromText(response);
+      } else {
+        // Standard JSON parsing for structured models
+        parsed = JSON.parse(response);
+      }
+      
+      if (!parsed) {
+        this.logger.warn('Failed to extract structured data from response');
+        return null;
+      }
       
       // Validate required fields
       if (!parsed.confidenceScore || parsed.confidenceScore < 0 || parsed.confidenceScore > 100) {
         this.logger.warn('Invalid confidence score in extraction response');
+        this.logger.debug('Parsed response:', JSON.stringify(parsed, null, 2));
         return null;
       }
 
       return parsed as VacancyExtractionResult;
     } catch (error) {
       this.logger.error('Failed to parse extraction response:', error.message);
+      this.logger.error('Raw response that failed to parse:', response);
+      return null;
+    }
+  }
+
+  /**
+   * Extract JSON from unstructured text response (for models that don't support structured output)
+   */
+  private extractJsonFromText(text: string): any | null {
+    try {
+      // First try to find JSON block in the text
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      
+      // If no JSON found, try to parse the entire response as JSON
+      return JSON.parse(text);
+    } catch (error) {
+      this.logger.warn('Could not extract JSON from text response, using fallback parsing');
+      
+      // Fallback: create a basic structure if the model provided readable text
+      if (text.trim().length > 0) {
+        return {
+          title: null,
+          company: null,
+          location: null,
+          description: text.trim(),
+          confidenceScore: 50, // Default low confidence for unstructured parsing
+          qualityScore: 50,
+          extractionMetadata: {
+            sourceType: "unstructured_text",
+            contentLength: text.length,
+            hasStructuredData: false,
+            language: "en"
+          }
+        };
+      }
+      
       return null;
     }
   }

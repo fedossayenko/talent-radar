@@ -54,9 +54,9 @@ export class DevBgScraper {
   }
 
   async scrapeJavaJobs(options: DevBgScraperOptions = {}): Promise<DevBgJobListing[]> {
-    const { page = 1 } = options;
+    const { page = 1, limit } = options;
     
-    this.logger.log(`Starting to scrape Java jobs from dev.bg - Page ${page}`);
+    this.logger.log(`Starting to scrape Java jobs from dev.bg - Page ${page}${limit ? ` (limit: ${limit})` : ''}`);
     
     try {
       const url = page === 1 ? this.apiUrl : `${this.apiUrl}page/${page}/`;
@@ -68,7 +68,15 @@ export class DevBgScraper {
         return [];
       }
 
-      return this.parseJobsFromHtml(response.data, page);
+      const jobs = this.parseJobsFromHtml(response.data, page);
+      
+      // Apply limit if specified
+      if (limit && jobs.length > limit) {
+        this.logger.log(`Limiting results to ${limit} jobs (found ${jobs.length})`);
+        return jobs.slice(0, limit);
+      }
+      
+      return jobs;
 
     } catch (error) {
       this.logger.error(`Failed to scrape dev.bg jobs for page ${page}:`, error.message);
@@ -107,7 +115,7 @@ export class DevBgScraper {
     return allJobs;
   }
 
-  async fetchJobDetails(jobUrl: string): Promise<{ description: string; requirements: string }> {
+  async fetchJobDetails(jobUrl: string): Promise<{ description: string; requirements: string; rawHtml?: string }> {
     try {
       this.logger.log(`Fetching job details from: ${jobUrl}`);
       
@@ -121,6 +129,7 @@ export class DevBgScraper {
       return {
         description: this.translationService.translateJobTerms(jobDetails.description),
         requirements: this.translationService.translateJobTerms(jobDetails.requirements),
+        rawHtml: response.data,
       };
 
     } catch (error) {

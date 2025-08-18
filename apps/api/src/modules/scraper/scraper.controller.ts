@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Logger, Query } from '@nestjs/common';
 import { ScraperScheduler } from './scraper.scheduler';
 import { ScraperService } from './scraper.service';
 
@@ -26,6 +26,28 @@ export class ScraperController {
       };
     } catch (error) {
       this.logger.error('Failed to trigger manual scraping:', error);
+      throw error;
+    }
+  }
+
+  @Post('dev-bg/test')
+  async triggerTestScraping(@Query('limit') limit?: string) {
+    const limitNum = limit ? parseInt(limit, 10) : 5;
+    this.logger.log(`Test scraping triggered via API with limit: ${limitNum}`);
+    
+    try {
+      const result = await this.scraperService.scrapeDevBg({
+        limit: limitNum,
+        enableAiExtraction: true,
+      });
+      
+      return {
+        success: true,
+        message: `Test scraping completed with ${limitNum} vacancy limit`,
+        data: result,
+      };
+    } catch (error) {
+      this.logger.error('Failed to trigger test scraping:', error);
       throw error;
     }
   }
