@@ -174,11 +174,10 @@ scraped-data/
 *.backup
 *.bak
 
-# Lock files (using bun.lockb, ignore others)
-package-lock.json
+# Lock files (now using npm)
 yarn.lock
 pnpm-lock.yaml
-# Keep bun.lockb for consistency
+bun.lockb
 
 # Generated files
 schema.prisma.backup
