@@ -12,11 +12,6 @@ on:
       - 'apps/web/**'
       - 'package.json'
       - '.github/workflows/ui-tests.yml'
-  push:
-    branches: [main, develop]
-    paths:
-      - 'apps/web/**'
-      - 'package.json'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
