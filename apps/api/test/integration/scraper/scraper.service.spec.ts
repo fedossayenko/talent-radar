@@ -13,6 +13,7 @@ describe('ScraperService Integration Tests', () => {
   let vacancyService: VacancyService;
   let companyService: CompanyService;
   let prismaService: PrismaService;
+  let scraperQueue: any;
 
   // Mock data
   const mockCompany = {
@@ -84,7 +85,7 @@ describe('ScraperService Integration Tests', () => {
         {
           provide: VacancyService,
           useValue: {
-            create: jest.fn(),
+            create: jest.fn().mockResolvedValue({ data: mockVacancy }),
             update: jest.fn(),
           },
         },
@@ -106,6 +107,14 @@ describe('ScraperService Integration Tests', () => {
             },
           },
         },
+        {
+          provide: 'BullQueue_scraper',
+          useValue: {
+            add: jest.fn(),
+            process: jest.fn(),
+            on: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -114,6 +123,7 @@ describe('ScraperService Integration Tests', () => {
     vacancyService = module.get<VacancyService>(VacancyService);
     companyService = module.get<CompanyService>(CompanyService);
     prismaService = module.get<PrismaService>(PrismaService);
+    scraperQueue = module.get<any>('BullQueue_scraper');
   });
 
   beforeEach(() => {
@@ -130,7 +140,7 @@ describe('ScraperService Integration Tests', () => {
       });
       (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
       (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null); // No existing vacancy
-      (vacancyService.create as jest.Mock).mockResolvedValue(mockVacancy);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
 
       const result = await service.scrapeDevBg();
 
@@ -218,7 +228,7 @@ describe('ScraperService Integration Tests', () => {
       });
       (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
       (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null);
-      (vacancyService.create as jest.Mock).mockResolvedValue(mockVacancy);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
 
       await service.scrapeDevBg();
 
@@ -239,7 +249,7 @@ describe('ScraperService Integration Tests', () => {
       (devBgScraper.fetchJobDetails as jest.Mock).mockRejectedValue(new Error('Failed to fetch details'));
       (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
       (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null);
-      (vacancyService.create as jest.Mock).mockResolvedValue(mockVacancy);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
 
       const result = await service.scrapeDevBg();
 
