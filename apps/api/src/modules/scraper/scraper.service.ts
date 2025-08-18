@@ -147,7 +147,7 @@ export class ScraperService {
       let vacancyId: string;
       if (existingVacancy) {
         // Update existing vacancy
-        const updatedVacancy = await this.vacancyService.update(existingVacancy.id, {
+        await this.vacancyService.update(existingVacancy.id, {
           ...vacancyData,
           status: 'active', // Reactivate if it was inactive
         });

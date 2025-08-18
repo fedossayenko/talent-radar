@@ -13,7 +13,6 @@ describe('ScraperService Integration Tests', () => {
   let vacancyService: VacancyService;
   let companyService: CompanyService;
   let prismaService: PrismaService;
-  let scraperQueue: any;
 
   // Mock data
   const mockCompany = {
@@ -123,7 +122,6 @@ describe('ScraperService Integration Tests', () => {
     vacancyService = module.get<VacancyService>(VacancyService);
     companyService = module.get<CompanyService>(CompanyService);
     prismaService = module.get<PrismaService>(PrismaService);
-    scraperQueue = module.get<any>('BullQueue_scraper');
   });
 
   beforeEach(() => {

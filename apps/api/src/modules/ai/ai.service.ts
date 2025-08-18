@@ -342,7 +342,7 @@ export class AiService {
       
       // If no JSON found, try to parse the entire response as JSON
       return JSON.parse(text);
-    } catch (error) {
+    } catch {
       this.logger.warn('Could not extract JSON from text response, using fallback parsing');
       
       // Fallback: create a basic structure if the model provided readable text

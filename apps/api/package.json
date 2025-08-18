@@ -21,10 +21,10 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "type-check": "tsc --noEmit --project tsconfig.build.json",
-    "db:generate": "bunx prisma generate",
-    "db:migrate": "bunx prisma migrate dev",
-    "db:studio": "bunx prisma studio",
-    "db:seed": "bunx prisma db seed",
+    "db:generate": "npx prisma generate",
+    "db:migrate": "npx prisma migrate dev",
+    "db:studio": "npx prisma studio",
+    "db:seed": "npx prisma db seed",
     "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix"
   },
   "dependencies": {

@@ -44,7 +44,7 @@ typings/
 
 # Optional package manager cache directories
 .npm
-.bun
+
 
 # Optional eslint cache
 .eslintcache
@@ -177,7 +177,7 @@ scraped-data/
 # Lock files (now using npm)
 yarn.lock
 pnpm-lock.yaml
-bun.lockb
+
 
 # Generated files
 schema.prisma.backup

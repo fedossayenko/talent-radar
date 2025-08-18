@@ -195,10 +195,10 @@ docker-compose -f docker-compose.dev.yml logs api | grep -E "AI|extraction|GPT"
 docker exec -it talent-radar-api ls -la /app/apps/api/dev.db
 
 # Run database migrations
-docker exec -it talent-radar-api sh -c "cd apps/api && bunx prisma migrate dev"
+docker exec -it talent-radar-api sh -c "cd apps/api && npx prisma migrate dev"
 
 # Reset database (CAUTION: deletes all data)
-docker exec -it talent-radar-api sh -c "cd apps/api && rm -f dev.db && bunx prisma migrate dev"
+docker exec -it talent-radar-api sh -c "cd apps/api && rm -f dev.db && npx prisma migrate dev"
 ```
 
 ## Data Export

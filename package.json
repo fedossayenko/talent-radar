@@ -41,24 +41,20 @@
     "docker:logs": "docker-compose logs -f",
     "docker:build": "docker-compose build",
     "docker:restart": "docker-compose restart",
-    "setup": "bun install && bun run db:generate && bun run db:migrate",
-    "clean": "bun run --filter='*' clean",
-    "reset": "bun run clean && rm -rf node_modules && bun install"
+    "setup": "npm install && npm run db:generate && npm run db:migrate",
+    "clean": "npm run --workspaces clean",
+    "reset": "npm run clean && rm -rf node_modules && npm install"
   },
   "devDependencies": {
     "@types/node": "^20.19.11",
     "concurrently": "^8.2.2",
     "typescript": "^5.9.2",
     "prettier": "^3.6.2",
-    "eslint": "^8.57.1",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
-    "@typescript-eslint/parser": "^6.21.0",
     "husky": "^8.0.3",
     "lint-staged": "^15.5.2"
   },
   "engines": {
-    "node": ">=22.0.0 <23.0.0",
-    "bun": ">=1.0.0"
+    "node": ">=22.0.0 <23.0.0"
   },
   "repository": {
     "type": "git",
