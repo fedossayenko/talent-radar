@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { vacancyApi } from '@/lib/api'
 import { VacancyFilters, VacancyListResponse } from '@/types/vacancy'
 
@@ -20,9 +20,9 @@ export function useVacancies(filters: VacancyFilters = {}) {
       order,
       ...otherFilters
     }),
-    keepPreviousData: true, // Smooth pagination transitions
+    placeholderData: keepPreviousData, // Smooth pagination transitions
     staleTime: 5 * 60 * 1000, // 5 minutes
-    cacheTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
   })
 }
 

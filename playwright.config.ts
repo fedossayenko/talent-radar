@@ -67,11 +67,26 @@ export default defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  // webServer: [
-  //   {
-  //     command: 'npm run dev:web',
-  //     port: 3001,
-  //     reuseExistingServer: !process.env.CI,
-  //   },
-  // ],
+  webServer: process.env.CI ? [
+    {
+      command: 'cd apps/api && npm run start:dev',
+      port: 3000,
+      reuseExistingServer: false,
+      timeout: 120 * 1000,
+      env: {
+        DATABASE_URL: 'file:./test/tmp/e2e-test.db',
+        REDIS_URL: 'redis://localhost:6379',
+        NODE_ENV: 'test',
+      },
+    },
+    {
+      command: 'cd apps/web && npm run preview',
+      port: 3001,
+      reuseExistingServer: false,
+      timeout: 120 * 1000,
+      env: {
+        VITE_API_URL: 'http://localhost:3000/api/v1',
+      },
+    },
+  ] : undefined,
 });

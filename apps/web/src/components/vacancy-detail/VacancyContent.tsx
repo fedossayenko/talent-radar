@@ -8,10 +8,9 @@ interface ContentSectionProps {
   title: string
   content: string | string[] | null | undefined
   icon?: string
-  isCollapsible?: boolean
 }
 
-function ContentSection({ title, content, icon, isCollapsible = false }: ContentSectionProps) {
+function ContentSection({ title, content, icon }: ContentSectionProps) {
   if (!content || (Array.isArray(content) && content.length === 0)) return null
 
   const renderContent = () => {

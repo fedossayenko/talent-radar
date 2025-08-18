@@ -86,7 +86,9 @@ jobs:
           NODE_ENV: test
 
       - name: Build applications
-        run: bun run build
+        run: |
+          bun run build:api
+          bun run build:web
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

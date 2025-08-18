@@ -1,5 +1,5 @@
 import { ParsedVacancy } from '@/types/vacancy'
-import { getWorkModelClasses, getCompanyInitials, truncateText } from '@/lib/utils'
+import { getWorkModelClasses, getCompanyInitials } from '@/lib/utils'
 import { ArrowTopRightOnSquareIcon, ShareIcon } from '@heroicons/react/24/outline'
 
 interface VacancyHeaderProps {

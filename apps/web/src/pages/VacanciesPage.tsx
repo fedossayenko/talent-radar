@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useVacancies } from '@/hooks/useVacancies'
 import { parseVacancy } from '@/lib/utils'
@@ -22,7 +22,7 @@ export default function VacanciesPage() {
     isLoading, 
     isError, 
     error, 
-    isPreviousData 
+    isPlaceholderData 
   } = useVacancies({
     page,
     limit,
@@ -102,7 +102,7 @@ export default function VacanciesPage() {
       </div>
 
       {/* Loading overlay for pagination transitions */}
-      <div className={`transition-opacity duration-200 ${isPreviousData ? 'opacity-50' : 'opacity-100'}`}>
+      <div className={`transition-opacity duration-200 ${isPlaceholderData ? 'opacity-50' : 'opacity-100'}`}>
         {/* Vacancy List */}
         <VacancyList
           vacancies={parsedVacancies}
@@ -123,7 +123,7 @@ export default function VacanciesPage() {
             pageSize={data.pagination.limit}
             onPageSizeChange={handlePageSizeChange}
             totalItems={data.pagination.total}
-            isLoading={isLoading || isPreviousData}
+            isLoading={isLoading || isPlaceholderData}
           />
         </div>
       )}
