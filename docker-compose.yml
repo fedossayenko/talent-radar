@@ -71,7 +71,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    command: ["npm", "run", "start:dev"]
+    command: ["npm", "run", "dev:api"]
 
   web:
     build:
@@ -132,7 +132,7 @@ services:
     networks:
       - talent-radar-network
     restart: unless-stopped
-    command: ["npm", "run", "start:scraper"]
+    command: ["npm", "run", "dev:scraper"]
 
   adminer:
     image: adminer:4.8.1

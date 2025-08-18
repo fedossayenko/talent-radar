@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { useVacancies } from '@/hooks/useVacancies'
 import { parseVacancy } from '@/lib/utils'
 import VacancyList from '@/components/vacancies/VacancyList'
@@ -8,6 +8,7 @@ import { ParsedVacancy } from '@/types/vacancy'
 
 export default function VacanciesPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   
   // Get URL parameters or defaults
   const page = parseInt(searchParams.get('page') || '1', 10)
@@ -30,7 +31,14 @@ export default function VacanciesPage() {
   })
 
   // Parse vacancies for display
-  const parsedVacancies: ParsedVacancy[] = data?.data.map(parseVacancy) || []
+  const parsedVacancies: ParsedVacancy[] = data?.data?.map(parseVacancy) || []
+  
+  // Debug logging
+  console.log('Debug - useVacancies data:', data)
+  console.log('Debug - isLoading:', isLoading)
+  console.log('Debug - isError:', isError)
+  console.log('Debug - error:', error)
+  console.log('Debug - parsedVacancies length:', parsedVacancies.length)
   
   // Handle page change
   const handlePageChange = useCallback((newPage: number) => {
@@ -47,12 +55,10 @@ export default function VacanciesPage() {
     setSearchParams(newParams)
   }, [searchParams, setSearchParams])
 
-  // Handle vacancy click (future: navigate to detail page)
+  // Handle vacancy click - navigate to detail page
   const handleVacancyClick = useCallback((vacancy: ParsedVacancy) => {
-    console.log('Vacancy clicked:', vacancy)
-    // Future: navigate to detail page
-    // navigate(`/vacancies/${vacancy.id}`)
-  }, [])
+    navigate(`/vacancies/${vacancy.id}`)
+  }, [navigate])
 
   return (
     <div className="space-y-6">
@@ -72,7 +78,7 @@ export default function VacanciesPage() {
           <div className="flex items-center text-sm text-gray-500">
             {isLoading ? (
               <div className="animate-pulse">Loading...</div>
-            ) : data ? (
+            ) : data?.pagination ? (
               <div>
                 {data.pagination.total} total vacancies
               </div>
@@ -108,7 +114,7 @@ export default function VacanciesPage() {
       </div>
 
       {/* Pagination */}
-      {data && data.pagination.pages > 1 && (
+      {data?.pagination && data.pagination.pages > 1 && (
         <div className="bg-white rounded-lg border border-gray-200">
           <Pagination
             currentPage={data.pagination.page}
