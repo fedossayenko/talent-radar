@@ -268,4 +268,67 @@ export class CompanyService {
       throw error;
     }
   }
+
+  /**
+   * Create or update company analysis from scraped and AI-analyzed data
+   */
+  async createOrUpdateAnalysis(analysisData: {
+    companyId: string;
+    analysisSource: string;
+    overallScore?: number;
+    pros?: string;
+    cons?: string;
+    cultureScore?: number;
+    workLifeBalance?: number;
+    careerGrowth?: number;
+    salaryCompetitiveness?: number;
+    benefitsScore?: number;
+    techCulture?: number;
+    retentionRate?: number;
+    workEnvironment?: string;
+    interviewProcess?: string;
+    growthOpportunities?: string;
+    benefits?: string;
+    technologies?: string;
+    values?: string;
+    confidenceScore: number;
+    rawAnalysisData: string;
+  }) {
+    this.logger.log(`Creating/updating company analysis for company ${analysisData.companyId} from ${analysisData.analysisSource}`);
+
+    try {
+      // Check if analysis already exists for this company and source
+      const existingAnalysis = await this.prisma.companyAnalysis.findFirst({
+        where: {
+          companyId: analysisData.companyId,
+          analysisSource: analysisData.analysisSource,
+        },
+      });
+
+      let analysis;
+      if (existingAnalysis) {
+        // Update existing analysis
+        analysis = await this.prisma.companyAnalysis.update({
+          where: { id: existingAnalysis.id },
+          data: {
+            ...analysisData,
+            updatedAt: new Date(),
+          },
+        });
+        this.logger.log(`Updated existing company analysis for ${analysisData.companyId}`);
+      } else {
+        // Create new analysis
+        analysis = await this.prisma.companyAnalysis.create({
+          data: analysisData,
+        });
+        this.logger.log(`Created new company analysis for ${analysisData.companyId}`);
+      }
+
+      return analysis;
+
+    } catch (error) {
+      this.logger.error(`Failed to create/update company analysis for ${analysisData.companyId}:`, error);
+      throw error;
+    }
+  }
 }

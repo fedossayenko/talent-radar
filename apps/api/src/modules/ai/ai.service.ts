@@ -35,6 +35,80 @@ export interface VacancyExtractionResult {
   };
 }
 
+export interface CompanyProfileAnalysisResult {
+  name: string | null;
+  description: string | null;
+  industry: string | null;
+  size: string | null;
+  location: string | null;
+  website: string | null;
+  employeeCount: number | null;
+  founded: number | null;
+  technologies: string[] | null;
+  benefits: string[] | null;
+  values: string[] | null;
+  hiringProcess: string[] | null;
+  pros: string[] | null;
+  cons: string[] | null;
+  cultureScore: number | null;
+  workLifeBalance: number | null;
+  careerGrowth: number | null;
+  techCulture: number | null;
+  confidenceScore: number;
+  dataCompleteness: number;
+}
+
+export interface CompanyWebsiteAnalysisResult {
+  name: string | null;
+  description: string | null;
+  industry: string | null;
+  location: string | null;
+  website: string | null;
+  technologies: string[] | null;
+  benefits: string[] | null;
+  values: string[] | null;
+  workEnvironment: string | null;
+  pros: string[] | null;
+  cons: string[] | null;
+  cultureScore: number | null;
+  workLifeBalance: number | null;
+  careerGrowth: number | null;
+  techCulture: number | null;
+  confidenceScore: number;
+  dataCompleteness: number;
+}
+
+export interface ConsolidatedCompanyAnalysisResult {
+  name: string | null;
+  description: string | null;
+  industry: string | null;
+  size: string | null;
+  location: string | null;
+  website: string | null;
+  employeeCount: number | null;
+  founded: number | null;
+  technologies: string[] | null;
+  benefits: string[] | null;
+  values: string[] | null;
+  workEnvironment: string | null;
+  hiringProcess: string[] | null;
+  growthOpportunities: string[] | null;
+  pros: string[] | null;
+  cons: string[] | null;
+  interviewProcess: string | null;
+  cultureScore: number | null;
+  retentionRate: number | null;
+  workLifeBalance: number | null;
+  careerGrowth: number | null;
+  salaryCompetitiveness: number | null;
+  benefitsScore: number | null;
+  techCulture: number | null;
+  recommendationScore: number | null;
+  confidenceScore: number;
+  dataCompleteness: number;
+  sourceDataSummary: string | null;
+}
+
 
 @Injectable()
 export class AiService {
@@ -144,6 +218,241 @@ export class AiService {
 
     } catch (error) {
       this.logger.error(`Failed to extract vacancy data from ${sourceUrl}:`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Analyze company profile data from dev.bg
+   */
+  async analyzeCompanyProfile(
+    content: string,
+    sourceUrl: string,
+    options: { skipCache?: boolean } = {},
+  ): Promise<CompanyProfileAnalysisResult | null> {
+    try {
+      // Generate content hash for caching
+      const contentHash = HashingUtil.generateContentHash({
+        url: sourceUrl,
+        content: content,
+        useUrlHashing: this.config.contentHashing.enableUrlHashing,
+        useContentHashing: this.config.contentHashing.enableContentHashing,
+        cleanBeforeHash: this.config.contentHashing.contentCleaningBeforeHash,
+      });
+
+      // Check cache first
+      if (!options.skipCache && this.config.enableCaching) {
+        const cachedResult = await this.getCachedCompanyAnalysis(contentHash, 'profile');
+        if (cachedResult) {
+          this.logger.log(`Cache hit for company profile analysis: ${contentHash}`);
+          return cachedResult;
+        }
+      }
+
+      // Clean and optimize content
+      const optimizedContent = await this.optimizeContentForExtraction(content);
+      
+      // Prepare prompt
+      const prompt = this.config.prompts.companyProfile.template
+        .replace('{content}', optimizedContent)
+        .replace('{sourceUrl}', sourceUrl);
+
+      // Make API call
+      const apiCall: any = {
+        model: this.config.models.scraping.vacancy, // Reuse vacancy model for now
+        messages: [
+          {
+            role: 'user' as const,
+            content: prompt,
+          },
+        ],
+        max_completion_tokens: this.config.prompts.companyProfile.maxTokens,
+      };
+
+      // Model-specific configurations
+      const isGpt5Nano = this.config.models.scraping.vacancy.includes('gpt-5-nano');
+      
+      if (!isGpt5Nano) {
+        apiCall.temperature = this.config.prompts.companyProfile.temperature;
+        apiCall.response_format = { type: 'json_object' as const };
+      }
+
+      const response = await this.openai.chat.completions.create(apiCall);
+      const analysisResult = this.parseCompanyAnalysisResponse(response.choices[0]?.message?.content, isGpt5Nano);
+      
+      if (!analysisResult) {
+        this.logger.warn('Failed to parse company profile analysis response');
+        return null;
+      }
+
+      // Cache the result
+      if (this.config.enableCaching) {
+        await this.cacheCompanyAnalysis(contentHash, 'profile', analysisResult);
+      }
+
+      this.logger.log(`Successfully analyzed company profile with ${analysisResult.confidenceScore}% confidence`);
+      return analysisResult;
+
+    } catch (error) {
+      this.logger.error(`Failed to analyze company profile from ${sourceUrl}:`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Analyze company website content
+   */
+  async analyzeCompanyWebsite(
+    content: string,
+    sourceUrl: string,
+    options: { skipCache?: boolean } = {},
+  ): Promise<CompanyWebsiteAnalysisResult | null> {
+    try {
+      // Generate content hash for caching
+      const contentHash = HashingUtil.generateContentHash({
+        url: sourceUrl,
+        content: content,
+        useUrlHashing: this.config.contentHashing.enableUrlHashing,
+        useContentHashing: this.config.contentHashing.enableContentHashing,
+        cleanBeforeHash: this.config.contentHashing.contentCleaningBeforeHash,
+      });
+
+      // Check cache first
+      if (!options.skipCache && this.config.enableCaching) {
+        const cachedResult = await this.getCachedCompanyAnalysis(contentHash, 'website');
+        if (cachedResult) {
+          this.logger.log(`Cache hit for company website analysis: ${contentHash}`);
+          return cachedResult;
+        }
+      }
+
+      // Clean and optimize content
+      const optimizedContent = await this.optimizeContentForExtraction(content);
+      
+      // Prepare prompt
+      const prompt = this.config.prompts.companyWebsite.template
+        .replace('{content}', optimizedContent)
+        .replace('{sourceUrl}', sourceUrl);
+
+      // Make API call
+      const apiCall: any = {
+        model: this.config.models.scraping.vacancy,
+        messages: [
+          {
+            role: 'user' as const,
+            content: prompt,
+          },
+        ],
+        max_completion_tokens: this.config.prompts.companyWebsite.maxTokens,
+      };
+
+      // Model-specific configurations
+      const isGpt5Nano = this.config.models.scraping.vacancy.includes('gpt-5-nano');
+      
+      if (!isGpt5Nano) {
+        apiCall.temperature = this.config.prompts.companyWebsite.temperature;
+        apiCall.response_format = { type: 'json_object' as const };
+      }
+
+      const response = await this.openai.chat.completions.create(apiCall);
+      const analysisResult = this.parseCompanyAnalysisResponse(response.choices[0]?.message?.content, isGpt5Nano, 'website');
+      
+      if (!analysisResult) {
+        this.logger.warn('Failed to parse company website analysis response');
+        return null;
+      }
+
+      // Cache the result
+      if (this.config.enableCaching) {
+        await this.cacheCompanyAnalysis(contentHash, 'website', analysisResult);
+      }
+
+      this.logger.log(`Successfully analyzed company website with ${analysisResult.confidenceScore}% confidence`);
+      return analysisResult;
+
+    } catch (error) {
+      this.logger.error(`Failed to analyze company website from ${sourceUrl}:`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Create consolidated company analysis from multiple sources
+   */
+  async consolidateCompanyAnalysis(
+    companyName: string,
+    devBgData?: CompanyProfileAnalysisResult,
+    websiteData?: CompanyWebsiteAnalysisResult,
+    options: { skipCache?: boolean } = {},
+  ): Promise<ConsolidatedCompanyAnalysisResult | null> {
+    try {
+      if (!devBgData && !websiteData) {
+        this.logger.warn('No data provided for company analysis consolidation');
+        return null;
+      }
+
+      // Generate cache key based on input data
+      const cacheKey = HashingUtil.generateContentHash({
+        url: `consolidated-${companyName}`,
+        content: JSON.stringify({ devBgData, websiteData }),
+        useUrlHashing: true,
+        useContentHashing: true,
+        cleanBeforeHash: false,
+      });
+
+      // Check cache first
+      if (!options.skipCache && this.config.enableCaching) {
+        const cachedResult = await this.getCachedCompanyAnalysis(cacheKey, 'consolidated');
+        if (cachedResult) {
+          this.logger.log(`Cache hit for consolidated company analysis: ${companyName}`);
+          return cachedResult;
+        }
+      }
+
+      // Prepare prompt with data from both sources
+      const prompt = this.config.prompts.consolidatedCompany.template
+        .replace('{devBgData}', devBgData ? JSON.stringify(devBgData, null, 2) : 'No dev.bg data available')
+        .replace('{websiteData}', websiteData ? JSON.stringify(websiteData, null, 2) : 'No website data available')
+        .replace('{companyName}', companyName);
+
+      // Make API call
+      const apiCall: any = {
+        model: this.config.models.scraping.vacancy,
+        messages: [
+          {
+            role: 'user' as const,
+            content: prompt,
+          },
+        ],
+        max_completion_tokens: this.config.prompts.consolidatedCompany.maxTokens,
+      };
+
+      // Model-specific configurations
+      const isGpt5Nano = this.config.models.scraping.vacancy.includes('gpt-5-nano');
+      
+      if (!isGpt5Nano) {
+        apiCall.temperature = this.config.prompts.consolidatedCompany.temperature;
+        apiCall.response_format = { type: 'json_object' as const };
+      }
+
+      const response = await this.openai.chat.completions.create(apiCall);
+      const analysisResult = this.parseCompanyAnalysisResponse(response.choices[0]?.message?.content, isGpt5Nano, 'consolidated');
+      
+      if (!analysisResult) {
+        this.logger.warn('Failed to parse consolidated company analysis response');
+        return null;
+      }
+
+      // Cache the result
+      if (this.config.enableCaching) {
+        await this.cacheCompanyAnalysis(cacheKey, 'consolidated', analysisResult);
+      }
+
+      this.logger.log(`Successfully consolidated company analysis for ${companyName} with ${analysisResult.confidenceScore}% confidence`);
+      return analysisResult;
+
+    } catch (error) {
+      this.logger.error(`Failed to consolidate company analysis for ${companyName}:`, error.message);
       return null;
     }
   }
@@ -363,6 +672,79 @@ export class AiService {
         };
       }
       
+      return null;
+    }
+  }
+
+  /**
+   * Parse company analysis response (handles different analysis types)
+   */
+  private parseCompanyAnalysisResponse(response: string | undefined, isUnstructuredModel: boolean = false, analysisType: 'profile' | 'website' | 'consolidated' = 'profile'): any | null {
+    if (!response) return null;
+
+    try {
+      let parsed: any;
+      
+      if (isUnstructuredModel) {
+        // For models like GPT-5 Nano that don't support structured output
+        parsed = this.extractJsonFromText(response);
+      } else {
+        // Standard JSON parsing for structured models
+        parsed = JSON.parse(response);
+      }
+      
+      if (!parsed) {
+        this.logger.warn(`Failed to extract structured data from company ${analysisType} analysis response`);
+        return null;
+      }
+      
+      // Validate required fields based on analysis type
+      if (!parsed.confidenceScore || parsed.confidenceScore < 0 || parsed.confidenceScore > 100) {
+        this.logger.warn(`Invalid confidence score in company ${analysisType} analysis response`);
+        return null;
+      }
+
+      return parsed;
+    } catch (error) {
+      this.logger.error(`Failed to parse company ${analysisType} analysis response:`, error.message);
+      this.logger.error('Raw response that failed to parse:', response);
+      return null;
+    }
+  }
+
+  /**
+   * Cache company analysis result
+   */
+  private async cacheCompanyAnalysis(contentHash: string, analysisType: string, analysisResult: any): Promise<void> {
+    try {
+      const cacheKey = `company_analysis_${analysisType}:${contentHash}`;
+      const expirySeconds = this.config.contentHashing.hashCacheExpiryDays * 24 * 60 * 60;
+      
+      await this.redisService.set(
+        cacheKey,
+        JSON.stringify(analysisResult),
+        expirySeconds,
+      );
+    } catch (error) {
+      this.logger.warn(`Failed to cache company ${analysisType} analysis result:`, error.message);
+    }
+  }
+
+  /**
+   * Get cached company analysis result
+   */
+  private async getCachedCompanyAnalysis(contentHash: string, analysisType: string): Promise<any | null> {
+    try {
+      const cacheKey = `company_analysis_${analysisType}:${contentHash}`;
+      const cached = await this.redisService.get(cacheKey);
+      
+      if (cached) {
+        return JSON.parse(cached);
+      }
+      
+      return null;
+    } catch (error) {
+      this.logger.warn(`Failed to get cached company ${analysisType} analysis result:`, error.message);
       return null;
     }
   }

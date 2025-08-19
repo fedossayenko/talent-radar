@@ -114,6 +114,14 @@ describe('ScraperService Integration Tests', () => {
             on: jest.fn(),
           },
         },
+        {
+          provide: 'BullQueue_company-analysis',
+          useValue: {
+            add: jest.fn(),
+            process: jest.fn(),
+            on: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -318,6 +326,195 @@ describe('ScraperService Integration Tests', () => {
       expect(mapWorkModelToEmploymentType('part-time')).toBe('part-time');
       expect(mapWorkModelToEmploymentType('contract')).toBe('contract');
       expect(mapWorkModelToEmploymentType('unknown')).toBe('full-time'); // default
+    });
+  });
+
+  describe('Company Analysis Integration', () => {
+    let companyAnalysisQueue: any;
+
+    beforeEach(() => {
+      companyAnalysisQueue = {
+        add: jest.fn(),
+        process: jest.fn(),
+        on: jest.fn(),
+      };
+    });
+
+    it('should process company URLs and queue company analysis jobs when enabled', async () => {
+      // Arrange
+      const jobListingsWithCompanyUrls = [
+        {
+          ...mockJobListings[0],
+          companyProfileUrl: 'https://dev.bg/company/test-company/',
+          companyWebsite: 'https://test-company.com',
+        },
+      ];
+
+      // Mock DevBgScraper to return job listings with company URLs
+      (devBgScraper.scrapeAllJavaJobs as jest.Mock).mockResolvedValue(jobListingsWithCompanyUrls);
+      (devBgScraper.fetchJobDetails as jest.Mock).mockResolvedValue({
+        description: 'Detailed job description',
+        requirements: 'Detailed requirements',
+        companyProfileUrl: 'https://dev.bg/company/test-company/',
+        companyWebsite: 'https://test-company.com',
+      });
+
+      (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
+      (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
+
+      // Act
+      const result = await service.scrapeDevBg({ enableCompanyAnalysis: true });
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.totalJobsFound).toBe(1);
+      expect(result.newVacancies).toBe(1);
+
+      // Verify company analysis queue was used
+      expect(companyAnalysisQueue.add).toHaveBeenCalledWith(
+        'analyze-company',
+        expect.objectContaining({
+          companyId: mockCompany.id,
+          companyName: mockCompany.name,
+          profileUrl: 'https://dev.bg/company/test-company/',
+          websiteUrl: 'https://test-company.com',
+        })
+      );
+    });
+
+    it('should not queue company analysis jobs when disabled', async () => {
+      // Arrange
+      const jobListingsWithCompanyUrls = [
+        {
+          ...mockJobListings[0],
+          companyProfileUrl: 'https://dev.bg/company/test-company/',
+          companyWebsite: 'https://test-company.com',
+        },
+      ];
+
+      (devBgScraper.scrapeAllJavaJobs as jest.Mock).mockResolvedValue(jobListingsWithCompanyUrls);
+      (devBgScraper.fetchJobDetails as jest.Mock).mockResolvedValue({
+        description: 'Detailed job description',
+        requirements: 'Detailed requirements',
+        companyProfileUrl: 'https://dev.bg/company/test-company/',
+        companyWebsite: 'https://test-company.com',
+      });
+
+      (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
+      (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
+
+      // Act
+      const result = await service.scrapeDevBg({ enableCompanyAnalysis: false });
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.totalJobsFound).toBe(1);
+      expect(result.newVacancies).toBe(1);
+
+      // Verify company analysis queue was NOT used
+      expect(companyAnalysisQueue.add).not.toHaveBeenCalled();
+    });
+
+    it('should handle company analysis job queuing errors gracefully', async () => {
+      // Arrange
+      const jobListingsWithCompanyUrls = [
+        {
+          ...mockJobListings[0],
+          companyProfileUrl: 'https://dev.bg/company/test-company/',
+        },
+      ];
+
+      (devBgScraper.scrapeAllJavaJobs as jest.Mock).mockResolvedValue(jobListingsWithCompanyUrls);
+      (devBgScraper.fetchJobDetails as jest.Mock).mockResolvedValue({
+        description: 'Detailed job description',
+        requirements: 'Detailed requirements',
+        companyProfileUrl: 'https://dev.bg/company/test-company/',
+      });
+
+      (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
+      (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
+
+      // Mock queue error
+      companyAnalysisQueue.add.mockRejectedValue(new Error('Queue failed'));
+
+      // Act
+      const result = await service.scrapeDevBg({ enableCompanyAnalysis: true });
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.totalJobsFound).toBe(1);
+      expect(result.newVacancies).toBe(1);
+      // Should not fail the entire scraping process due to queue error
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('should queue company analysis only when company URLs are found', async () => {
+      // Arrange
+      const jobListingsWithoutCompanyUrls = [mockJobListings[0]]; // No company URLs
+
+      (devBgScraper.scrapeAllJavaJobs as jest.Mock).mockResolvedValue(jobListingsWithoutCompanyUrls);
+      (devBgScraper.fetchJobDetails as jest.Mock).mockResolvedValue({
+        description: 'Detailed job description',
+        requirements: 'Detailed requirements',
+        // No company URLs in response
+      });
+
+      (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
+      (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
+
+      // Act
+      const result = await service.scrapeDevBg({ enableCompanyAnalysis: true });
+
+      // Assert
+      expect(result).toBeDefined();
+      expect(result.totalJobsFound).toBe(1);
+      expect(result.newVacancies).toBe(1);
+
+      // Verify company analysis was not queued (no URLs found)
+      expect(companyAnalysisQueue.add).not.toHaveBeenCalled();
+    });
+
+    it('should handle partial company URL data correctly', async () => {
+      // Arrange
+      const jobListingsWithPartialUrls = [
+        {
+          ...mockJobListings[0],
+          // Only profile URL, no website
+        },
+      ];
+
+      (devBgScraper.scrapeAllJavaJobs as jest.Mock).mockResolvedValue(jobListingsWithPartialUrls);
+      (devBgScraper.fetchJobDetails as jest.Mock).mockResolvedValue({
+        description: 'Detailed job description',
+        requirements: 'Detailed requirements',
+        companyProfileUrl: 'https://dev.bg/company/test-company/',
+        // No company website
+      });
+
+      (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
+      (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
+
+      // Act
+      const result = await service.scrapeDevBg({ enableCompanyAnalysis: true });
+
+      // Assert
+      expect(result).toBeDefined();
+
+      // Verify company analysis was queued with available data
+      expect(companyAnalysisQueue.add).toHaveBeenCalledWith(
+        'analyze-company',
+        expect.objectContaining({
+          companyId: mockCompany.id,
+          companyName: mockCompany.name,
+          profileUrl: 'https://dev.bg/company/test-company/',
+          websiteUrl: undefined, // No website URL provided
+        })
+      );
     });
   });
 });
