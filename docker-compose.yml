@@ -1,27 +1,4 @@
-version: '3.8'
-
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: talent-radar-postgres
-    environment:
-      POSTGRES_DB: talent_radar
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_HOST_AUTH_METHOD: trust
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    networks:
-      - talent-radar-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   redis:
     image: redis:7-alpine
     container_name: talent-radar-redis
@@ -48,19 +25,49 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3001
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/talent_radar
+      DATABASE_URL: file:./data/dev.db
       REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       LOG_LEVEL: debug
+      # AI Configuration
+      AI_SERVICE_ENABLED: "true"
+      AI_MODEL_DEFAULT: gpt-5-nano
+      AI_TIMEOUT: 60000
+      AI_MAX_RETRIES: 3
+      AI_ENABLE_CACHING: "true"
+      AI_CACHE_EXPIRY_HOURS: 24
+      AI_MAX_CONTENT_LENGTH: 10000
+      # Scraper Configuration
+      SCRAPER_ENABLED: "true"
+      DEVBG_BASE_URL: https://dev.bg
+      DEVBG_API_URL: https://dev.bg/company/jobs/java/
+      DEVBG_REQUEST_TIMEOUT: 30000
+      DEVBG_REQUEST_DELAY: 2000
+      DEVBG_MAX_PAGES: 10
+      DEVBG_USER_AGENT: "TalentRadar/1.0 (Job Aggregator)"
+      # Scraper Queue Settings
+      SCRAPER_QUEUE_ATTEMPTS: 3
+      SCRAPER_QUEUE_BACKOFF_DELAY: 5000
+      SCRAPER_QUEUE_KEEP_COMPLETED: 100
+      SCRAPER_QUEUE_KEEP_FAILED: 50
+      # Scraper Filters
+      SCRAPER_TECH_FILTER: java,spring,hibernate,maven,gradle,mysql,postgresql,docker,kubernetes,aws
+      SCRAPER_LOCATION_FILTER: bulgaria,sofia,plovdiv,varna,burgas,remote
+      SCRAPER_JOB_TYPE_FILTER: backend,full-stack,java-developer
+      # Monitoring & Metrics
+      METRICS_ENABLED: "true"
+      HEALTH_CHECK_ENABLED: "true"
+      # Scraper Limits
+      SCRAPER_MAX_VACANCIES: 20
     ports:
       - "3001:3001"
     volumes:
       - ./apps/api/src:/app/apps/api/src:ro
       - ./packages:/app/packages:ro
       - ./node_modules:/app/node_modules:ro
+      - api_data:/app/data
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -113,20 +120,50 @@ services:
     container_name: talent-radar-scraper
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://postgres:password@postgres:5432/talent_radar
+      DATABASE_URL: file:./data/dev.db
       REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       SCRAPER_MODE: true
       PLAYWRIGHT_HEADLESS: true
       SCRAPER_CONCURRENCY: 3
       LOG_LEVEL: debug
+      # AI Configuration
+      AI_SERVICE_ENABLED: "true"
+      AI_MODEL_DEFAULT: gpt-5-nano
+      AI_TIMEOUT: 60000
+      AI_MAX_RETRIES: 3
+      AI_ENABLE_CACHING: "true"
+      AI_CACHE_EXPIRY_HOURS: 24
+      AI_MAX_CONTENT_LENGTH: 10000
+      # Scraper Configuration
+      SCRAPER_ENABLED: "true"
+      DEVBG_BASE_URL: https://dev.bg
+      DEVBG_API_URL: https://dev.bg/company/jobs/java/
+      DEVBG_REQUEST_TIMEOUT: 30000
+      DEVBG_REQUEST_DELAY: 2000
+      DEVBG_MAX_PAGES: 10
+      DEVBG_USER_AGENT: "TalentRadar/1.0 (Job Aggregator)"
+      # Scraper Queue Settings
+      SCRAPER_QUEUE_ATTEMPTS: 3
+      SCRAPER_QUEUE_BACKOFF_DELAY: 5000
+      SCRAPER_QUEUE_KEEP_COMPLETED: 100
+      SCRAPER_QUEUE_KEEP_FAILED: 50
+      # Scraper Filters
+      SCRAPER_TECH_FILTER: java,spring,hibernate,maven,gradle,mysql,postgresql,docker,kubernetes,aws
+      SCRAPER_LOCATION_FILTER: bulgaria,sofia,plovdiv,varna,burgas,remote
+      SCRAPER_JOB_TYPE_FILTER: backend,full-stack,java-developer
+      # Monitoring & Metrics
+      METRICS_ENABLED: "true"
+      HEALTH_CHECK_ENABLED: "true"
+      # Scraper Limits
+      SCRAPER_MAX_VACANCIES: 20
     volumes:
       - ./apps/api/src:/app/apps/api/src:ro
       - ./packages:/app/packages:ro
       - ./node_modules:/app/node_modules:ro
+      - scraper_data:/app/data
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -134,19 +171,6 @@ services:
     restart: unless-stopped
     command: ["npm", "run", "dev:scraper"]
 
-  adminer:
-    image: adminer:4.8.1
-    container_name: talent-radar-adminer
-    environment:
-      ADMINER_DEFAULT_SERVER: postgres
-    ports:
-      - "8080:8080"
-    depends_on:
-      - postgres
-    networks:
-      - talent-radar-network
-    profiles:
-      - tools
 
   redis-commander:
     image: ghcr.io/joeferner/redis-commander:latest
@@ -163,8 +187,10 @@ services:
       - tools
 
 volumes:
-  postgres_data:
-    name: talent-radar-postgres-data
+  api_data:
+    name: talent-radar-api-data
+  scraper_data:
+    name: talent-radar-scraper-data
   redis_data:
     name: talent-radar-redis-data
 
