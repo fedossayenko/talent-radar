@@ -84,7 +84,7 @@ describe('ScraperService Integration Tests', () => {
         {
           provide: VacancyService,
           useValue: {
-            create: jest.fn(),
+            create: jest.fn().mockResolvedValue({ data: mockVacancy }),
             update: jest.fn(),
           },
         },
@@ -104,6 +104,14 @@ describe('ScraperService Integration Tests', () => {
             company: {
               count: jest.fn(),
             },
+          },
+        },
+        {
+          provide: 'BullQueue_scraper',
+          useValue: {
+            add: jest.fn(),
+            process: jest.fn(),
+            on: jest.fn(),
           },
         },
       ],
@@ -130,7 +138,7 @@ describe('ScraperService Integration Tests', () => {
       });
       (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
       (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null); // No existing vacancy
-      (vacancyService.create as jest.Mock).mockResolvedValue(mockVacancy);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
 
       const result = await service.scrapeDevBg();
 
@@ -218,7 +226,7 @@ describe('ScraperService Integration Tests', () => {
       });
       (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
       (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null);
-      (vacancyService.create as jest.Mock).mockResolvedValue(mockVacancy);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
 
       await service.scrapeDevBg();
 
@@ -239,7 +247,7 @@ describe('ScraperService Integration Tests', () => {
       (devBgScraper.fetchJobDetails as jest.Mock).mockRejectedValue(new Error('Failed to fetch details'));
       (companyService.findOrCreate as jest.Mock).mockResolvedValue(mockCompany);
       (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null);
-      (vacancyService.create as jest.Mock).mockResolvedValue(mockVacancy);
+      (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
 
       const result = await service.scrapeDevBg();
 

@@ -1,0 +1,97 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+  body {
+    @apply bg-white text-gray-900;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer components {
+  .vacancy-card {
+    @apply bg-white rounded-lg border border-gray-200 p-6 hover:shadow-lg transition-shadow duration-200 cursor-pointer;
+  }
+
+  .vacancy-title {
+    @apply text-lg font-semibold text-gray-900 mb-2 leading-tight;
+  }
+
+  .company-info {
+    @apply flex items-center gap-2 mb-3;
+  }
+
+  .company-name {
+    @apply text-gray-700 font-medium;
+  }
+
+  .location-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .location-remote {
+    @apply bg-green-100 text-green-800;
+  }
+
+  .location-hybrid {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .location-office {
+    @apply bg-gray-100 text-gray-800;
+  }
+
+  .salary-info {
+    @apply text-sm text-gray-600 mb-3;
+  }
+
+  .tech-tags {
+    @apply flex flex-wrap gap-1 mb-3;
+  }
+
+  .tech-tag {
+    @apply inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700;
+  }
+
+  .quality-indicator {
+    @apply inline-flex items-center gap-1 text-xs font-medium;
+  }
+
+  .quality-high {
+    @apply text-green-600;
+  }
+
+  .quality-medium {
+    @apply text-yellow-600;
+  }
+
+  .quality-low {
+    @apply text-red-600;
+  }
+
+  .pagination-container {
+    @apply flex items-center justify-between px-4 py-3 bg-white border-t border-gray-200 sm:px-6;
+  }
+
+  .pagination-info {
+    @apply text-sm text-gray-700;
+  }
+
+  .pagination-controls {
+    @apply flex items-center gap-2;
+  }
+
+  .pagination-button {
+    @apply px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .pagination-button-active {
+    @apply bg-blue-50 text-blue-600 border-blue-300;
+  }
+}

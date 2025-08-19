@@ -5,22 +5,25 @@ export class DatabaseHelper {
   private static prisma: PrismaClient;
 
   static async initializeTestDatabase(): Promise<PrismaClient> {
+    const workerId = process.env.JEST_WORKER_ID || '1';
+    const databaseUrl = `file:./test-${workerId}.db`;
+
     if (!this.prisma) {
       this.prisma = new PrismaClient({
         datasources: {
           db: {
-            url: process.env.DATABASE_URL || 'file:./test.db',
+            url: databaseUrl,
           },
         },
       });
 
       await this.prisma.$connect();
-      
+
       // Simple approach: use db push to ensure schema is up to date
       try {
-        execSync('bunx prisma db push --force-reset --skip-generate', { 
+        execSync(`DATABASE_URL=${databaseUrl} npx prisma db push --force-reset --skip-generate`, {
           stdio: 'inherit',
-          timeout: 30000
+          timeout: 30000,
         });
       } catch (error) {
         // eslint-disable-next-line no-console

@@ -44,7 +44,7 @@ typings/
 
 # Optional package manager cache directories
 .npm
-.bun
+
 
 # Optional eslint cache
 .eslintcache
@@ -67,6 +67,7 @@ typings/
 # dotenv environment variables file
 .env
 .env.local
+.env.docker
 .env.development.local
 .env.test.local
 .env.production.local
@@ -173,11 +174,10 @@ scraped-data/
 *.backup
 *.bak
 
-# Lock files (using bun.lockb, ignore others)
-package-lock.json
+# Lock files (now using npm)
 yarn.lock
 pnpm-lock.yaml
-# Keep bun.lockb for consistency
+
 
 # Generated files
 schema.prisma.backup

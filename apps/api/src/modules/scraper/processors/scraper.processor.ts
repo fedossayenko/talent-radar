@@ -65,8 +65,8 @@ export class ScraperProcessor {
       // Update job progress
       await job.progress(10);
 
-      // Execute scraping
-      const result = await this.scraperService.scrapeDevBg();
+      // Execute scraping with options
+      const result = await this.scraperService.scrapeDevBg(data.options);
 
       // Update job progress
       await job.progress(90);

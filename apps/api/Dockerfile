@@ -1,31 +1,31 @@
 # Multi-stage build for production optimization
-FROM oven/bun:1.2-alpine AS builder
+FROM node:22-alpine AS builder
 
 # Set working directory
 WORKDIR /app
 
 # Copy package files
-COPY package.json bun.lock ./
+COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 
 # Install all dependencies (including dev dependencies for building)
-RUN bun install --frozen-lockfile
+RUN npm install
 
 # Copy source code
 COPY apps/api ./apps/api
 
 # Generate Prisma client
 WORKDIR /app/apps/api
-RUN bunx prisma generate
+RUN npx prisma generate
 
 # Build the application
-RUN bun run build
+RUN npm run build
 
 # Install only production dependencies for final image
-RUN bun install --production --frozen-lockfile
+RUN npm prune --production
 
 # Production stage
-FROM oven/bun:1.2-alpine AS production
+FROM node:22-alpine AS production
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init
@@ -46,7 +46,7 @@ COPY --from=builder --chown=nestjs:nodejs /app/apps/api/package.json ./
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/prisma ./prisma
 
 # Generate Prisma client in production environment
-RUN bunx prisma generate
+RUN npx prisma generate
 
 # Create simple healthcheck script
 RUN echo 'const http = require("http"); \
@@ -75,8 +75,8 @@ USER nestjs
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD bun healthcheck.js
+  CMD node healthcheck.js
 
 # Start the application with dumb-init
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["bun", "dist/main.js"]
+CMD ["node", "dist/main.js"]

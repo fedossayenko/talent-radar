@@ -34,13 +34,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Cache Prisma Client
         uses: actions/cache@v4
@@ -56,37 +57,39 @@ jobs:
         run: mkdir -p apps/api/test/tmp
 
       - name: Generate Prisma Client
-        run: bun run db:generate
+        run: npm run db:generate
         env:
           DATABASE_URL: file:./test/tmp/ci-test.db
 
       - name: Run database migrations
-        run: bun run db:migrate
+        run: npm run db:migrate
         env:
           DATABASE_URL: file:./test/tmp/ci-test.db
 
       - name: Lint code
-        run: bun run lint
+        run: npm run lint
 
       - name: Type check
-        run: bun run type-check
+        run: npm run type-check
 
       - name: Run unit tests
-        run: bun run test
+        run: npm run test
         env:
           DATABASE_URL: file:./test/tmp/ci-test.db
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
 
       - name: Run E2E tests
-        run: bun run test:e2e
+        run: npm run test:e2e
         env:
           DATABASE_URL: file:./test/tmp/ci-test.db
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
 
       - name: Build applications
-        run: bun run build
+        run: |
+          npm run build:api
+          npm run build:web
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -103,16 +106,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: '22'
+          cache: 'npm'
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: npm ci
 
       - name: Run security audit
-        run: bun audit
+        run: npm audit
 
       - name: Run dependency review
         uses: actions/dependency-review-action@v4

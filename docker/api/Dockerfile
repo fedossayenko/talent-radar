@@ -1,6 +1,6 @@
 # TalentRadar API Dockerfile
 
-FROM oven/bun:1.0-alpine AS base
+FROM node:22-alpine AS base
 
 # Install system dependencies
 RUN apk add --no-cache \
@@ -10,7 +10,8 @@ RUN apk add --no-cache \
     freetype-dev \
     harfbuzz \
     ca-certificates \
-    ttf-freefont
+    ttf-freefont \
+    curl
 
 # Set Playwright to use installed Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
@@ -32,7 +33,8 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Development stage
 FROM base AS development
-RUN bun install
+RUN npm ci
+RUN npm install -g @nestjs/cli
 COPY . .
 EXPOSE 3001
 
@@ -40,7 +42,7 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3001/health || exit 1
 
-CMD ["bun", "run", "start:dev"]
+CMD ["npm", "run", "start:dev"]
 
 # Build stage
 FROM base AS builder

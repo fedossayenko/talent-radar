@@ -21,6 +21,12 @@ export class VacancyService {
       order = 'desc',
     } = query;
 
+    // Convert string parameters to numbers
+    const pageNum = parseInt(page as string, 10) || 1;
+    const limitNum = parseInt(limit as string, 10) || 20;
+    const salaryMinNum = salaryMin ? parseInt(salaryMin as string, 10) : undefined;
+    const salaryMaxNum = salaryMax ? parseInt(salaryMax as string, 10) : undefined;
+
     this.logger.log(`Finding vacancies with filters: ${JSON.stringify(query)}`);
 
     try {
@@ -54,13 +60,13 @@ export class VacancyService {
         where.experienceLevel = experienceLevel;
       }
 
-      if (salaryMin || salaryMax) {
+      if (salaryMinNum || salaryMaxNum) {
         where.AND = where.AND || [];
-        if (salaryMin) {
-          where.AND.push({ salaryMin: { gte: salaryMin } });
+        if (salaryMinNum) {
+          where.AND.push({ salaryMin: { gte: salaryMinNum } });
         }
-        if (salaryMax) {
-          where.AND.push({ salaryMax: { lte: salaryMax } });
+        if (salaryMaxNum) {
+          where.AND.push({ salaryMax: { lte: salaryMaxNum } });
         }
       }
 
@@ -96,18 +102,18 @@ export class VacancyService {
           },
         },
         orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum,
       });
 
       return {
         success: true,
         data: vacancies,
         pagination: {
-          page,
-          limit,
+          page: pageNum,
+          limit: limitNum,
           total,
-          pages: Math.ceil(total / limit),
+          pages: Math.ceil(total / limitNum),
         },
       };
     } catch (error) {
