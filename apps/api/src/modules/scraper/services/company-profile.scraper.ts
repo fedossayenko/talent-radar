@@ -148,7 +148,7 @@ export class CompanyProfileScraper {
   /**
    * Parse dev.bg company profile HTML
    */
-  private parseDevBgCompanyProfile(html: string, sourceUrl: string): Omit<CompanyProfileData, 'rawContent' | 'sourceUrl' | 'sourceSite' | 'scrapedAt'> {
+  private parseDevBgCompanyProfile(html: string, _sourceUrl: string): Omit<CompanyProfileData, 'rawContent' | 'sourceUrl' | 'sourceSite' | 'scrapedAt'> {
     const $ = cheerio.load(html);
     
     // Extract company name
@@ -209,13 +209,13 @@ export class CompanyProfileScraper {
   /**
    * Parse company website HTML for additional information
    */
-  private parseCompanyWebsite(html: string, sourceUrl: string): Omit<CompanyProfileData, 'rawContent' | 'sourceUrl' | 'sourceSite' | 'scrapedAt'> {
+  private parseCompanyWebsite(html: string, _sourceUrl: string): Omit<CompanyProfileData, 'rawContent' | 'sourceUrl' | 'sourceSite' | 'scrapedAt'> {
     const $ = cheerio.load(html);
     
     // Extract company name from multiple possible sources
     const name = $('h1').first().text().trim() ||
                  $('.company-name, .brand-name, .site-title').first().text().trim() ||
-                 $('title').text().split(/[\-|]/, 1)[0].trim();
+                 $('title').text().split(/[-|]/, 1)[0].trim();
 
     // Extract description from about sections
     const description = $('.about, .company-description, .intro, #about').first().text().trim() ||

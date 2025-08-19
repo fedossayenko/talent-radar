@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CompanyProfileScraper } from './company-profile.scraper';
-import { Logger } from '@nestjs/common';
 
 // Mock Playwright
 const mockPage = {

@@ -12,8 +12,22 @@ export const createMockPrismaService = () => {
     },
     companyAnalysis: {
       create: jest.fn(),
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+    },
+    companySource: {
+      create: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      upsert: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
+      count: jest.fn(),
+      groupBy: jest.fn(),
     },
     vacancy: {
       count: jest.fn(),

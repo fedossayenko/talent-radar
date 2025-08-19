@@ -2,14 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CompanySourceService } from './company-source.service';
 import { PrismaService } from '../../common/database/prisma.service';
 import { ConfigService } from '@nestjs/config';
-import { Logger } from '@nestjs/common';
 import { createMockPrismaService } from '../../../test/test-utils/prisma-mock.helper';
 import { createHash } from 'crypto';
 
 describe('CompanySourceService', () => {
   let service: CompanySourceService;
   let prismaService: jest.Mocked<PrismaService>;
-  let configService: jest.Mocked<ConfigService>;
 
   const mockPrismaService = {
     ...createMockPrismaService(),
@@ -48,7 +46,6 @@ describe('CompanySourceService', () => {
 
     service = module.get<CompanySourceService>(CompanySourceService);
     prismaService = module.get<jest.Mocked<PrismaService>>(PrismaService);
-    configService = module.get<jest.Mocked<ConfigService>>(ConfigService);
 
     // ConfigService is not used for TTL - it's hardcoded in the service
   });

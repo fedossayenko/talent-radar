@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { Logger } from '@nestjs/common';
 import * as Bull from 'bull';
 import { ScraperProcessor } from './scraper.processor';
 import { ScraperService, CompanyAnalysisJobData } from '../scraper.service';
@@ -12,10 +11,7 @@ import { CompanyProfileScraper } from '../services/company-profile.scraper';
 
 describe('ScraperProcessor - Company Analysis', () => {
   let processor: ScraperProcessor;
-  let scraperService: jest.Mocked<ScraperService>;
   let aiService: jest.Mocked<AiService>;
-  let aiPipelineService: jest.Mocked<AiProcessingPipelineService>;
-  let vacancyService: jest.Mocked<VacancyService>;
   let companyService: jest.Mocked<CompanyService>;
   let companySourceService: jest.Mocked<CompanySourceService>;
   let companyProfileScraper: jest.Mocked<CompanyProfileScraper>;
@@ -139,10 +135,7 @@ describe('ScraperProcessor - Company Analysis', () => {
     }).compile();
 
     processor = module.get<ScraperProcessor>(ScraperProcessor);
-    scraperService = module.get(ScraperService);
     aiService = module.get(AiService);
-    aiPipelineService = module.get(AiProcessingPipelineService);
-    vacancyService = module.get(VacancyService);
     companyService = module.get(CompanyService);
     companySourceService = module.get(CompanySourceService);
     companyProfileScraper = module.get(CompanyProfileScraper);
@@ -394,7 +387,7 @@ describe('ScraperProcessor - Company Analysis', () => {
       expect(companyService.createOrUpdateAnalysis).toHaveBeenCalledWith({
         companyId: mockCompanyAnalysisJobData.companyId,
         analysisSource: mockCompanyAnalysisJobData.sourceSite,
-        overallScore: mockAnalysisResult.recommendationScore,
+        recommendationScore: mockAnalysisResult.recommendationScore,
         pros: JSON.stringify(mockAnalysisResult.pros),
         cons: JSON.stringify(mockAnalysisResult.cons),
         cultureScore: mockAnalysisResult.cultureScore,
@@ -408,10 +401,10 @@ describe('ScraperProcessor - Company Analysis', () => {
         interviewProcess: mockAnalysisResult.interviewProcess,
         growthOpportunities: JSON.stringify(mockAnalysisResult.growthOpportunities),
         benefits: JSON.stringify(mockAnalysisResult.benefits),
-        technologies: JSON.stringify(mockAnalysisResult.technologies),
-        values: JSON.stringify(mockAnalysisResult.values),
+        techStack: JSON.stringify(mockAnalysisResult.technologies),
+        companyValues: JSON.stringify(mockAnalysisResult.values),
         confidenceScore: mockAnalysisResult.confidenceScore,
-        rawAnalysisData: JSON.stringify(mockAnalysisResult),
+        rawData: JSON.stringify(mockAnalysisResult),
       });
     });
 

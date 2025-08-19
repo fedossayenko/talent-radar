@@ -47,7 +47,17 @@ describe('CompanyService', () => {
 
       // Assert
       expect(result.success).toBe(true);
-      expect(result.data).toEqual(mockCompanies);
+      expect(result.data).toEqual(
+        mockCompanies.map(company => ({
+          ...company,
+          analyses: undefined,
+          analysisScore: null,
+          hasAnalysis: false,
+          analysisAge: null,
+          recommendation: null,
+          scores: null,
+        }))
+      );
       expect(result.pagination).toEqual({
         page: 1,
         limit: 20,
@@ -62,6 +72,15 @@ describe('CompanyService', () => {
           analyses: {
             orderBy: { createdAt: 'desc' },
             take: 1,
+            select: {
+              recommendationScore: true,
+              cultureScore: true,
+              workLifeBalance: true,
+              careerGrowth: true,
+              techCulture: true,
+              confidenceScore: true,
+              createdAt: true,
+            },
           },
           _count: {
             select: {
@@ -354,7 +373,10 @@ describe('CompanyService', () => {
       prismaService.companyAnalysis.create.mockResolvedValue(mockAnalysis);
 
       // Act
-      const result = await service.createOrUpdateAnalysis(companyId, analysisData);
+      const result = await service.createOrUpdateAnalysis({
+        companyId,
+        ...analysisData,
+      });
 
       // Assert
       expect(result.success).toBe(true);
@@ -364,7 +386,23 @@ describe('CompanyService', () => {
       expect(prismaService.companyAnalysis.create).toHaveBeenCalledWith({
         data: {
           companyId,
-          ...analysisData,
+          analysisSource: analysisData.analysisSource,
+          confidenceScore: analysisData.confidenceScore,
+          dataCompleteness: analysisData.dataCompleteness,
+          name: analysisData.name,
+          industry: analysisData.industry,
+          location: analysisData.location,
+          size: analysisData.size,
+          description: analysisData.description,
+          pros: analysisData.pros,
+          cons: analysisData.cons,
+          cultureScore: analysisData.cultureScore,
+          workLifeBalance: analysisData.workLifeBalance,
+          careerGrowth: analysisData.careerGrowth,
+          compensation: analysisData.compensation,
+          techCulture: analysisData.techCulture,
+          workEnvironment: analysisData.workEnvironment,
+          techStack: JSON.stringify(analysisData.technologies),
           createdAt: expect.any(Date),
         },
       });
@@ -383,7 +421,10 @@ describe('CompanyService', () => {
       prismaService.companyAnalysis.create.mockResolvedValue(mockAnalysis);
 
       // Act
-      const result = await service.createOrUpdateAnalysis(companyId, minimalAnalysisData);
+      const result = await service.createOrUpdateAnalysis({
+        companyId,
+        ...minimalAnalysisData,
+      });
 
       // Assert
       expect(result.success).toBe(true);
@@ -410,7 +451,10 @@ describe('CompanyService', () => {
       prismaService.companyAnalysis.create.mockRejectedValue(error);
 
       // Act & Assert
-      await expect(service.createOrUpdateAnalysis(companyId, analysisData)).rejects.toThrow(error);
+      await expect(service.createOrUpdateAnalysis({
+        companyId,
+        ...analysisData,
+      })).rejects.toThrow(error);
     });
 
     it('should create analysis with all optional fields populated', async () => {
@@ -441,7 +485,10 @@ describe('CompanyService', () => {
       prismaService.companyAnalysis.create.mockResolvedValue(mockAnalysis);
 
       // Act
-      const result = await service.createOrUpdateAnalysis(companyId, completeAnalysisData);
+      const result = await service.createOrUpdateAnalysis({
+        companyId,
+        ...completeAnalysisData,
+      });
 
       // Assert
       expect(result.success).toBe(true);
@@ -449,7 +496,24 @@ describe('CompanyService', () => {
       expect(prismaService.companyAnalysis.create).toHaveBeenCalledWith({
         data: {
           companyId,
-          ...completeAnalysisData,
+          analysisSource: completeAnalysisData.analysisSource,
+          confidenceScore: completeAnalysisData.confidenceScore,
+          dataCompleteness: completeAnalysisData.dataCompleteness,
+          name: completeAnalysisData.name,
+          industry: completeAnalysisData.industry,
+          location: completeAnalysisData.location,
+          size: completeAnalysisData.size,
+          description: completeAnalysisData.description,
+          benefits: completeAnalysisData.benefits,
+          pros: completeAnalysisData.pros,
+          cons: completeAnalysisData.cons,
+          cultureScore: completeAnalysisData.cultureScore,
+          workLifeBalance: completeAnalysisData.workLifeBalance,
+          careerGrowth: completeAnalysisData.careerGrowth,
+          compensation: completeAnalysisData.compensation,
+          techCulture: completeAnalysisData.techCulture,
+          workEnvironment: completeAnalysisData.workEnvironment,
+          techStack: JSON.stringify(completeAnalysisData.technologies),
           createdAt: expect.any(Date),
         },
       });
@@ -471,7 +535,10 @@ describe('CompanyService', () => {
         prismaService.companyAnalysis.create.mockResolvedValue(mockAnalysis);
 
         // Act
-        const result = await service.createOrUpdateAnalysis(companyId, analysisData);
+        const result = await service.createOrUpdateAnalysis({
+          companyId,
+          ...analysisData,
+        });
 
         // Assert
         expect(result.success).toBe(true);

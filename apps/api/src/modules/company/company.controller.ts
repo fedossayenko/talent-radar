@@ -14,6 +14,9 @@ export class CompanyController {
   @ApiQuery({ name: 'search', required: false, type: String })
   @ApiQuery({ name: 'industry', required: false, type: String })
   @ApiQuery({ name: 'size', required: false, type: String })
+  @ApiQuery({ name: 'sortBy', required: false, enum: ['name', 'overall', 'culture', 'workLife', 'career', 'tech'], description: 'Sort companies by field' })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'], description: 'Sort order (default: desc for scores, asc for name)' })
+  @ApiQuery({ name: 'hasAnalysis', required: false, type: Boolean, description: 'Filter companies with analysis data' })
   @ApiResponse({ status: 200, description: 'List of companies' })
   async findAll(@Query() query: any) {
     return this.companyService.findAll(query);
@@ -40,5 +43,38 @@ export class CompanyController {
   @ApiResponse({ status: 200, description: 'Company analysis completed' })
   async analyzeCompany(@Param('id') id: string, @Body() options: { forceRefresh?: boolean }) {
     return this.companyService.analyzeCompany(id, options.forceRefresh);
+  }
+
+  @Get(':id/analysis')
+  @ApiOperation({ summary: 'Get company analysis data' })
+  @ApiResponse({ status: 200, description: 'Company analysis data' })
+  @ApiResponse({ status: 404, description: 'Company or analysis not found' })
+  async getCompanyAnalysis(@Param('id') id: string) {
+    return this.companyService.getCompanyAnalysis(id);
+  }
+
+  @Get(':id/analysis/latest')
+  @ApiOperation({ summary: 'Get latest company analysis' })
+  @ApiResponse({ status: 200, description: 'Latest company analysis data' })
+  @ApiResponse({ status: 404, description: 'Company or analysis not found' })
+  async getLatestAnalysis(@Param('id') id: string) {
+    return this.companyService.getLatestAnalysis(id);
+  }
+
+  @Get(':id/insights')
+  @ApiOperation({ summary: 'Get company insights and key metrics' })
+  @ApiResponse({ status: 200, description: 'Company insights summary' })
+  @ApiResponse({ status: 404, description: 'Company not found' })
+  async getCompanyInsights(@Param('id') id: string) {
+    return this.companyService.getCompanyInsights(id);
+  }
+
+  @Get('top-rated')
+  @ApiOperation({ summary: 'Get top-rated companies based on analysis scores' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of companies to return (default: 20)' })
+  @ApiQuery({ name: 'metric', required: false, enum: ['overall', 'culture', 'workLife', 'career', 'tech'], description: 'Metric to sort by (default: overall)' })
+  @ApiResponse({ status: 200, description: 'Top-rated companies' })
+  async getTopRatedCompanies(@Query() query: { limit?: number; metric?: string }) {
+    return this.companyService.getTopRatedCompanies(query.limit, query.metric);
   }
 }

@@ -428,7 +428,7 @@ export class ScraperProcessor {
       const analysisData = {
         companyId,
         analysisSource: sourceSite,
-        overallScore: analysisResult.recommendationScore || null,
+        recommendationScore: analysisResult.recommendationScore || null,
         pros: analysisResult.pros ? JSON.stringify(analysisResult.pros) : null,
         cons: analysisResult.cons ? JSON.stringify(analysisResult.cons) : null,
         cultureScore: analysisResult.cultureScore || null,
@@ -442,10 +442,10 @@ export class ScraperProcessor {
         interviewProcess: analysisResult.interviewProcess || null,
         growthOpportunities: analysisResult.growthOpportunities ? JSON.stringify(analysisResult.growthOpportunities) : null,
         benefits: analysisResult.benefits ? JSON.stringify(analysisResult.benefits) : null,
-        technologies: analysisResult.technologies ? JSON.stringify(analysisResult.technologies) : null,
-        values: analysisResult.values ? JSON.stringify(analysisResult.values) : null,
+        techStack: analysisResult.technologies ? JSON.stringify(analysisResult.technologies) : null,
+        companyValues: analysisResult.values ? JSON.stringify(analysisResult.values) : null,
         confidenceScore: analysisResult.confidenceScore || 0,
-        rawAnalysisData: JSON.stringify(analysisResult),
+        rawData: JSON.stringify(analysisResult),
       };
 
       await this.companyService.createOrUpdateAnalysis(analysisData);

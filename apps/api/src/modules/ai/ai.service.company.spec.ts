@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { Logger } from '@nestjs/common';
 import { AiService, CompanyProfileAnalysisResult, CompanyWebsiteAnalysisResult, ConsolidatedCompanyAnalysisResult } from './ai.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { RedisMockService } from '../../../test/test-utils/redis-mock.service';
