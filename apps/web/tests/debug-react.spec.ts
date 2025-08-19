@@ -8,7 +8,7 @@ test("debug React Query data", async ({ page }) => {
   // Inject script to access React DevTools or component state
   const debugInfo = await page.evaluate(() => {
     // Try to find any global debugging info
-    const app = window as any;
+    const app = window as any; // eslint-disable-line @typescript-eslint/no-explicit-any
     const rootElement = document.getElementById("root");
     
     return {

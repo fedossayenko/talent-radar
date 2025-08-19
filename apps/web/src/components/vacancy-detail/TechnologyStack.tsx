@@ -67,7 +67,7 @@ export default function TechnologyStack({ vacancy }: TechnologyStackProps) {
     })
 
     // Remove empty categories
-    return Object.entries(categories).filter(([_, items]) => items.length > 0)
+    return Object.entries(categories).filter(([, items]) => items.length > 0)
   }
 
   const categorizedTechs = categorizeTechnologies(vacancy.technologies)
