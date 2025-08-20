@@ -59,15 +59,26 @@ import { MetricsModule } from './common/metrics/metrics.module';
     // Task scheduling
     ScheduleModule.forRoot(),
 
-    // Queue management
+    // Queue management (optional in development)
     BullModule.forRootAsync({
-      useFactory: () => ({
-        redis: {
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '6379'),
-          password: process.env.REDIS_PASSWORD,
-        },
-      }),
+      useFactory: () => {
+        const isTestEnv = process.env.NODE_ENV === 'test';
+        const isDevEnv = process.env.NODE_ENV === 'development';
+        const isRedisOptional = process.env.REDIS_OPTIONAL === 'true' || isTestEnv || isDevEnv;
+        
+        return {
+          redis: {
+            host: process.env.REDIS_HOST || 'localhost',
+            port: parseInt(process.env.REDIS_PORT || '6379'),
+            password: process.env.REDIS_PASSWORD,
+            // Add connection options to handle failures gracefully
+            retryDelayOnFailover: 100,
+            maxRetriesPerRequest: isRedisOptional ? 0 : 3,
+            lazyConnect: true,
+            enableOfflineQueue: false,
+          },
+        };
+      },
     }),
 
     // Core infrastructure
@@ -81,7 +92,7 @@ import { MetricsModule } from './common/metrics/metrics.module';
     // Feature modules
     VacancyModule,
     CompanyModule,
-    ScraperModule,
+    ScraperModule.forRoot(),
     AiModule,
     CvModule,
     ScoringModule,

@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module, forwardRef, DynamicModule } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule } from '@nestjs/config';
 import { ScraperService } from './scraper.service';
@@ -19,40 +19,57 @@ import { AiModule } from '../ai/ai.module';
 import { DatabaseModule } from '../../common/database/database.module';
 import scraperConfig from '../../config/scraper.config';
 
-@Module({
-  imports: [
-    ConfigModule.forFeature(scraperConfig),
-    DatabaseModule,
-    VacancyModule,
-    CompanyModule,
-    AiModule,
-    BullModule.registerQueue({
-      name: 'scraper',
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 2000,
-        },
-        removeOnComplete: 100,
-        removeOnFail: 50,
-      },
-    }),
-  ],
-  controllers: [ScraperController],
-  providers: [
-    ScraperService,
-    DevBgScraper,
-    ScraperProcessor,
-    ScraperScheduler,
-    TranslationService,
-    JobParserService,
-    TechPatternService,
-    ContentExtractorService,
-    HtmlCleanerService,
-    AiProcessingPipelineService,
-    CompanyProfileScraper,
-  ],
-  exports: [ScraperService, ScraperScheduler, ContentExtractorService, HtmlCleanerService, AiProcessingPipelineService],
-})
-export class ScraperModule {}
+@Module({})
+export class ScraperModule {
+  static forRoot(): DynamicModule {
+    const isTestEnv = process.env.NODE_ENV === 'test';
+    const isDevEnv = process.env.NODE_ENV === 'development';
+    const isRedisOptional = process.env.REDIS_OPTIONAL === 'true' || isTestEnv || isDevEnv;
+    
+    const imports: any[] = [
+      ConfigModule.forFeature(scraperConfig),
+      DatabaseModule,
+      VacancyModule,
+      CompanyModule,
+      AiModule,
+    ];
+    
+    // Only register Bull queue if Redis is available
+    if (!isRedisOptional) {
+      imports.push(
+        BullModule.registerQueue({
+          name: 'scraper',
+          defaultJobOptions: {
+            attempts: 3,
+            backoff: {
+              type: 'exponential',
+              delay: 2000,
+            },
+            removeOnComplete: 100,
+            removeOnFail: 50,
+          },
+        })
+      );
+    }
+    
+    return {
+      module: ScraperModule,
+      imports,
+      controllers: [ScraperController],
+      providers: [
+        ScraperService,
+        DevBgScraper,
+        ScraperProcessor,
+        ScraperScheduler,
+        TranslationService,
+        JobParserService,
+        TechPatternService,
+        ContentExtractorService,
+        HtmlCleanerService,
+        AiProcessingPipelineService,
+        CompanyProfileScraper,
+      ],
+      exports: [ScraperService, ScraperScheduler, ContentExtractorService, HtmlCleanerService, AiProcessingPipelineService],
+    };
+  }
+}

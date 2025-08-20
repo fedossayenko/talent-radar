@@ -27,6 +27,7 @@ services:
       PORT: 3001
       DATABASE_URL: file:./data/dev.db
       REDIS_URL: redis://redis:6379
+      REDIS_OPTIONAL: "true"
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       LOG_LEVEL: debug
@@ -65,11 +66,8 @@ services:
     volumes:
       - ./apps/api/src:/app/apps/api/src:ro
       - ./packages:/app/packages:ro
-      - ./node_modules:/app/node_modules:ro
       - api_data:/app/data
-    depends_on:
-      redis:
-        condition: service_healthy
+    depends_on: []
     networks:
       - talent-radar-network
     restart: unless-stopped
@@ -78,7 +76,8 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    command: ["npm", "run", "dev:api"]
+    working_dir: /app/apps/api
+    command: ["npm", "run", "start:dev"]
 
   web:
     build:
@@ -122,6 +121,7 @@ services:
       NODE_ENV: development
       DATABASE_URL: file:./data/dev.db
       REDIS_URL: redis://redis:6379
+      REDIS_OPTIONAL: "true"
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       SCRAPER_MODE: true
@@ -161,15 +161,13 @@ services:
     volumes:
       - ./apps/api/src:/app/apps/api/src:ro
       - ./packages:/app/packages:ro
-      - ./node_modules:/app/node_modules:ro
-      - scraper_data:/app/data
-    depends_on:
-      redis:
-        condition: service_healthy
+      - api_data:/app/data
+    depends_on: []
     networks:
       - talent-radar-network
     restart: unless-stopped
-    command: ["npm", "run", "dev:scraper"]
+    working_dir: /app/apps/api
+    command: ["npm", "run", "start:scraper"]
 
 
   redis-commander:
@@ -189,8 +187,6 @@ services:
 volumes:
   api_data:
     name: talent-radar-api-data
-  scraper_data:
-    name: talent-radar-scraper-data
   redis_data:
     name: talent-radar-redis-data
 

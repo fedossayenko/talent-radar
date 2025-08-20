@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { DevBgScraper, DevBgJobListing } from './scrapers/dev-bg.scraper';
@@ -46,7 +46,7 @@ export class ScraperService {
     // private readonly companySourceService: CompanySourceService,
     private readonly companyProfileScraper: CompanyProfileScraper,
     private readonly prisma: PrismaService,
-    @InjectQueue('scraper') private readonly scraperQueue: Queue,
+    @Optional() @InjectQueue('scraper') private readonly scraperQueue?: Queue,
   ) {
     this.logger.log('ScraperService initialized');
   }
@@ -305,6 +305,11 @@ export class ScraperService {
 
   private async queueAiExtraction(vacancyId: string, content: string, sourceUrl: string): Promise<void> {
     try {
+      if (!this.scraperQueue) {
+        this.logger.warn(`Queue not available - skipping AI extraction for vacancy ${vacancyId}`);
+        return;
+      }
+      
       // Create content hash for caching
       const contentHash = crypto.createHash('sha256').update(content).digest('hex');
 
@@ -403,6 +408,11 @@ export class ScraperService {
     analysisType: 'profile' | 'website'
   ): Promise<void> {
     try {
+      if (!this.scraperQueue) {
+        this.logger.warn(`Queue not available - skipping company analysis for ${analysisType}: ${sourceUrl}`);
+        return;
+      }
+      
       const companyAnalysisData: CompanyAnalysisJobData = {
         companyId,
         sourceSite,
