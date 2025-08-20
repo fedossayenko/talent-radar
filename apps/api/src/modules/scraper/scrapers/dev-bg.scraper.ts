@@ -115,7 +115,13 @@ export class DevBgScraper {
     return allJobs;
   }
 
-  async fetchJobDetails(jobUrl: string): Promise<{ description: string; requirements: string; rawHtml?: string }> {
+  async fetchJobDetails(jobUrl: string): Promise<{ 
+    description: string; 
+    requirements: string; 
+    rawHtml?: string;
+    companyProfileUrl?: string;
+    companyWebsite?: string;
+  }> {
     try {
       this.logger.log(`Fetching job details from: ${jobUrl}`);
       
@@ -125,11 +131,14 @@ export class DevBgScraper {
       });
 
       const jobDetails = this.jobParserService.parseJobDetailsFromHtml(response.data);
+      const companyUrls = this.jobParserService.extractCompanyUrls(response.data);
       
       return {
         description: this.translationService.translateJobTerms(jobDetails.description),
         requirements: this.translationService.translateJobTerms(jobDetails.requirements),
         rawHtml: response.data,
+        companyProfileUrl: companyUrls.profileUrl,
+        companyWebsite: companyUrls.website,
       };
 
     } catch (error) {

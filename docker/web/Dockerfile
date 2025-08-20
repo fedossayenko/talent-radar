@@ -1,6 +1,6 @@
 # TalentRadar Web Dockerfile
 
-FROM node:18-alpine AS base
+FROM node:22-alpine AS base
 
 # Install dependencies for building native modules
 RUN apk add --no-cache libc6-compat
@@ -19,8 +19,7 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Development stage
 FROM base AS development
-RUN npm install -g bun --@oven/bun-linux-x64
-RUN bun install
+RUN npm ci
 COPY . .
 EXPOSE 3000
 
@@ -28,7 +27,7 @@ EXPOSE 3000
 ENV NODE_ENV=development
 ENV NEXT_TELEMETRY_DISABLED=1
 
-CMD ["bun", "run", "dev"]
+CMD ["npm", "run", "dev"]
 
 # Builder stage
 FROM base AS builder

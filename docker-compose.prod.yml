@@ -1,7 +1,7 @@
 services:
   redis:
     image: redis:7-alpine
-    container_name: talent-radar-redis
+    container_name: talent-radar-redis-prod
     ports:
       - "6379:6379"
     volumes:
@@ -20,16 +20,16 @@ services:
     build:
       context: .
       dockerfile: ./docker/api/Dockerfile
-      target: development
-    container_name: talent-radar-api
+      target: production
+    container_name: talent-radar-api-prod
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: file:./data/dev.db
+      DATABASE_URL: file:./data/prod.db
       REDIS_URL: redis://redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      LOG_LEVEL: debug
+      LOG_LEVEL: info
       # AI Configuration
       AI_SERVICE_ENABLED: "true"
       AI_MODEL_DEFAULT: gpt-5-nano
@@ -63,9 +63,6 @@ services:
     ports:
       - "3001:3001"
     volumes:
-      - ./apps/api/src:/app/apps/api/src:ro
-      - ./packages:/app/packages:ro
-      - ./node_modules:/app/node_modules:ro
       - api_data:/app/data
     depends_on:
       redis:
@@ -78,36 +75,27 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    command: ["npm", "run", "dev:api"]
 
   web:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
-      target: development
-    container_name: talent-radar-web
+      target: production
+    container_name: talent-radar-web-prod
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       VITE_API_URL: http://localhost:3001
       VITE_APP_NAME: TalentRadar
       VITE_APP_VERSION: 0.1.0
     ports:
-      - "3000:3000"
-    volumes:
-      - ./apps/web/src:/app/src:ro
-      - ./apps/web/public:/app/public:ro
-      - ./apps/web/index.html:/app/index.html:ro
-      - ./apps/web/vite.config.ts:/app/vite.config.ts:ro
-      - ./apps/web/tsconfig.json:/app/tsconfig.json:ro
-      - ./apps/web/tailwind.config.js:/app/tailwind.config.js:ro
-      - ./apps/web/postcss.config.js:/app/postcss.config.js:ro
+      - "3000:80"
     depends_on:
       - api
     networks:
       - talent-radar-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -116,18 +104,18 @@ services:
     build:
       context: .
       dockerfile: ./docker/api/Dockerfile
-      target: development
-    container_name: talent-radar-scraper
+      target: production
+    container_name: talent-radar-scraper-prod
     environment:
-      NODE_ENV: development
-      DATABASE_URL: file:./data/dev.db
+      NODE_ENV: production
+      DATABASE_URL: file:./data/prod.db
       REDIS_URL: redis://redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       SCRAPER_MODE: true
       PLAYWRIGHT_HEADLESS: true
       SCRAPER_CONCURRENCY: 3
-      LOG_LEVEL: debug
+      LOG_LEVEL: info
       # AI Configuration
       AI_SERVICE_ENABLED: "true"
       AI_MODEL_DEFAULT: gpt-5-nano
@@ -159,9 +147,6 @@ services:
       # Scraper Limits
       SCRAPER_MAX_VACANCIES: 20
     volumes:
-      - ./apps/api/src:/app/apps/api/src:ro
-      - ./packages:/app/packages:ro
-      - ./node_modules:/app/node_modules:ro
       - scraper_data:/app/data
     depends_on:
       redis:
@@ -169,12 +154,10 @@ services:
     networks:
       - talent-radar-network
     restart: unless-stopped
-    command: ["npm", "run", "dev:scraper"]
-
 
   redis-commander:
     image: ghcr.io/joeferner/redis-commander:latest
-    container_name: talent-radar-redis-commander
+    container_name: talent-radar-redis-commander-prod
     environment:
       REDIS_HOSTS: local:redis:6379
     ports:
@@ -188,13 +171,13 @@ services:
 
 volumes:
   api_data:
-    name: talent-radar-api-data
+    name: talent-radar-api-data-prod
   scraper_data:
-    name: talent-radar-scraper-data
+    name: talent-radar-scraper-data-prod
   redis_data:
-    name: talent-radar-redis-data
+    name: talent-radar-redis-data-prod
 
 networks:
   talent-radar-network:
-    name: talent-radar-network
+    name: talent-radar-network-prod
     driver: bridge

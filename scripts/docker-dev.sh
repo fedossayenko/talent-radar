@@ -102,15 +102,15 @@ fi
 
 # Clean up any existing containers
 echo -e "${YELLOW}🧹 Cleaning up existing containers...${NC}"
-docker-compose -f docker-compose.dev.yml down --remove-orphans
+docker-compose down --remove-orphans
 
 # Build images
 echo -e "${YELLOW}🔨 Building Docker images...${NC}"
-docker-compose -f docker-compose.dev.yml --env-file .env.docker build
+docker-compose --env-file .env.docker build
 
 # Start services
 echo -e "${YELLOW}🚀 Starting Docker services...${NC}"
-docker-compose -f docker-compose.dev.yml --env-file .env.docker up -d redis
+docker-compose --env-file .env.docker up -d redis
 
 # Wait for Redis if netcat is available
 if command_exists nc; then
@@ -120,36 +120,39 @@ else
     sleep 10
 fi
 
-# Start API
-echo -e "${YELLOW}🎯 Starting API service...${NC}"
-docker-compose -f docker-compose.dev.yml --env-file .env.docker up -d api
+# Start API and Web
+echo -e "${YELLOW}🎯 Starting API and Web services...${NC}"
+docker-compose --env-file .env.docker up -d api web
 
 # Wait for API if netcat is available
 if command_exists nc; then
-    wait_for_service "API" 3000
+    wait_for_service "API" 3001
+    wait_for_service "Web" 3000
 else
-    echo -e "${YELLOW}⏳ Waiting 30 seconds for API to start...${NC}"
+    echo -e "${YELLOW}⏳ Waiting 30 seconds for services to start...${NC}"
     sleep 30
 fi
 
 echo -e "${GREEN}✨ Services are running!${NC}"
 echo ""
 echo -e "${BLUE}📍 Access points:${NC}"
-echo "  - API: http://localhost:3000"
-echo "  - Swagger: http://localhost:3000/api/docs"
-echo "  - Health: http://localhost:3000/api/v1/health"
+echo "  - API: http://localhost:3001"
+echo "  - Web UI: http://localhost:3000"
+echo "  - Swagger: http://localhost:3001/api/docs"
+echo "  - Health: http://localhost:3001/api/v1/health"
 echo ""
 echo -e "${BLUE}🛠 Available commands:${NC}"
 echo "  - Trigger AI scraping: ./scripts/trigger-scraping.sh"
-echo "  - View logs: docker-compose -f docker-compose.dev.yml logs -f api"
-echo "  - Start Prisma Studio: docker-compose -f docker-compose.dev.yml --profile tools up prisma-studio"
-echo "  - Start Redis Commander: docker-compose -f docker-compose.dev.yml --profile tools up redis-commander"
-echo "  - Quick test: curl http://localhost:3000/api/v1/health"
+echo "  - View API logs: docker-compose logs -f api"
+echo "  - View Web logs: docker-compose logs -f web"
+echo "  - Start Redis Commander: docker-compose --profile tools up redis-commander"
+echo "  - Quick test: curl http://localhost:3001/api/v1/health"
 echo ""
 echo -e "${BLUE}💡 Next steps:${NC}"
-echo "  1. Test API health: curl http://localhost:3000/api/v1/health"
-echo "  2. Trigger AI scraping: ./scripts/trigger-scraping.sh"
-echo "  3. Monitor database: ./scripts/monitor-database.sh"
+echo "  1. Test API health: curl http://localhost:3001/api/v1/health"
+echo "  2. Open Web UI: http://localhost:3000"
+echo "  3. Trigger AI scraping: ./scripts/trigger-scraping.sh"
+echo "  4. Monitor database: ./scripts/monitor-database.sh"
 echo ""
-echo -e "${RED}🛑 To stop: docker-compose -f docker-compose.dev.yml down${NC}"
-echo -e "${RED}🗑 To stop and remove all data: docker-compose -f docker-compose.dev.yml down -v${NC}"
+echo -e "${RED}🛑 To stop: docker-compose down${NC}"
+echo -e "${RED}🗑 To stop and remove all data: docker-compose down -v${NC}"

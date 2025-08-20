@@ -5,7 +5,6 @@
   "author": "TalentRadar Team",
   "private": true,
   "license": "MIT",
-  "type": "module",
   "scripts": {
     "build": "nest build --config tsconfig.build.json",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
@@ -20,6 +19,7 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:company-analysis": "node --loader ts-node/esm ./scripts/test-company-analysis.ts",
     "type-check": "tsc --noEmit --project tsconfig.build.json",
     "db:generate": "npx prisma generate",
     "db:migrate": "npx prisma migrate dev",

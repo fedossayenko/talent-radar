@@ -11,7 +11,7 @@ async function testRealScraper() {
   const logger = new Logger('TestRealScraper');
   
   try {
-    logger.log('🚀 Starting real scraper validation...');
+    logger.log('🚀 Starting real scraper validation with company analysis...');
     
     // Bootstrap the NestJS application context
     const app = await NestFactory.createApplicationContext(AppModule);
@@ -68,7 +68,11 @@ async function testRealScraper() {
     logger.log('\n📊 Test 3: Testing ScraperService full flow...');
     
     const serviceStartTime = Date.now();
-    const result = await scraperService.scrapeDevBg();
+    const result = await scraperService.scrapeDevBg({ 
+      limit: 3, 
+      enableAiExtraction: false, 
+      enableCompanyAnalysis: true 
+    });
     const serviceDuration = Date.now() - serviceStartTime;
     
     logger.log('✅ Full scraper service completed!');
@@ -94,8 +98,22 @@ async function testRealScraper() {
     const companiesAfter = await companyService.findAll({});
     const vacanciesAfter = await vacancyService.findAll({});
     
+    // Check company sources and analyses
+    const companySourcesAfter = await prismaService.companySource.findMany({
+      include: {
+        company: { select: { name: true } }
+      }
+    });
+    const companyAnalysesAfter = await prismaService.companyAnalysis.findMany({
+      include: {
+        company: { select: { name: true } }
+      }
+    });
+    
     logger.log(`📊 Companies after: ${companiesAfter.data.length} (+ ${companiesAfter.data.length - companiesBefore.data.length})`);
     logger.log(`📊 Vacancies after: ${vacanciesAfter.data.length} (+ ${vacanciesAfter.data.length - vacanciesBefore.data.length})`);
+    logger.log(`📊 Company sources: ${companySourcesAfter.length}`);
+    logger.log(`📊 Company analyses: ${companyAnalysesAfter.length}`);
     
     // Display some sample persisted data
     if (companiesAfter.data.length > companiesBefore.data.length) {
@@ -111,6 +129,23 @@ async function testRealScraper() {
       logger.log('📝 Sample new vacancies:');
       newVacancies.slice(0, 3).forEach((vacancy, index) => {
         logger.log(`   ${index + 1}. ${vacancy.title} at ${vacancy.company?.name || 'Unknown Company'}`);
+      });
+    }
+    
+    // Display sample company sources
+    if (companySourcesAfter.length > 0) {
+      logger.log('📋 Sample company sources:');
+      companySourcesAfter.slice(0, 3).forEach((source, index) => {
+        logger.log(`   ${index + 1}. ${source.company.name} - ${source.sourceSite} (${source.isValid ? '✅ Valid' : '❌ Invalid'})`);
+      });
+    }
+    
+    // Display sample company analyses
+    if (companyAnalysesAfter.length > 0) {
+      logger.log('🧠 Sample company analyses:');
+      companyAnalysesAfter.slice(0, 3).forEach((analysis, index) => {
+        const confidence = Math.round(analysis.confidenceScore * 100);
+        logger.log(`   ${index + 1}. ${analysis.company.name} - Source: ${analysis.analysisSource} (Confidence: ${confidence}%)`);
       });
     }
     
@@ -142,7 +177,7 @@ async function testRealScraper() {
     await app.close();
     
     // Summary
-    logger.log('\n🎉 REAL SCRAPER VALIDATION COMPLETED SUCCESSFULLY!');
+    logger.log('\n🎉 REAL SCRAPER WITH COMPANY ANALYSIS COMPLETED SUCCESSFULLY!');
     logger.log('='.repeat(60));
     logger.log('✅ All core functionality verified:');
     logger.log('   ✓ Direct scraper works');
@@ -150,6 +185,9 @@ async function testRealScraper() {
     logger.log('   ✓ Database persistence works');
     logger.log('   ✓ Job details fetching works');
     logger.log('   ✓ Companies and vacancies saved correctly');
+    logger.log('   ✓ Company analysis workflow integrated');
+    logger.log(`   ✓ Company sources tracked: ${companySourcesAfter.length}`);
+    logger.log(`   ✓ Company analyses generated: ${companyAnalysesAfter.length}`);
     logger.log('='.repeat(60));
     
   } catch (error) {

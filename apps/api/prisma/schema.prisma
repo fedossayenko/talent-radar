@@ -11,23 +11,49 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Company model
-model Company {
-  id          String   @id @default(cuid())
-  name        String
-  website     String?
-  description String?
-  industry    String?
-  size        String? // 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+
-  location    String?
-  logo        String?
-  founded     Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// Company Source model - tracks where company info was scraped from
+model CompanySource {
+  id             String   @id @default(cuid())
+  companyId      String
+  sourceSite     String   // dev.bg, company website, etc.
+  sourceUrl      String   // URL where the data was scraped from
+  lastScrapedAt  DateTime @default(now())
+  scrapedContent String?  // Stored scraped content
+  contentHash    String?  // Hash for change detection
+  isValid        Boolean  @default(true) // Whether the source URL is still valid
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   // Relations
-  analyses  CompanyAnalysis[]
-  vacancies Vacancy[]
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, sourceSite])
+  @@map("company_sources")
+}
+
+// Company model
+model Company {
+  id               String   @id @default(cuid())
+  name             String
+  website          String?  // Company's main website
+  originalWebsite  String?  // Original company website (different from scraped site)
+  description      String?
+  industry         String?
+  size             String?  // 1-10, 11-50, 51-200, 201-500, 501-1000, 1000+
+  location         String?
+  logo             String?
+  founded          Int?
+  linkedinUrl      String?  // LinkedIn company page
+  githubUrl        String?  // GitHub organization
+  employeeCount    Int?     // Number of employees
+  lastAnalyzedAt   DateTime? // When AI analysis was last performed
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  analyses     CompanyAnalysis[]
+  vacancies    Vacancy[]
+  sources      CompanySource[]
 
   @@map("companies")
 }
@@ -36,17 +62,36 @@ model Company {
 model CompanyAnalysis {
   id                     String   @id @default(cuid())
   companyId              String
-  cultureScore           Float?
-  retentionRate          Float?
+  sourceSite             String?  // Which site the analysis came from (dev.bg, company website)
+  
+  // Scoring metrics
+  cultureScore           Float?   // 0-10 rating for company culture
+  retentionRate          Float?   // Employee retention percentage
+  workLifeBalance        Float?   // 0-10 rating for work-life balance
+  careerGrowth           Float?   // 0-10 rating for career growth opportunities
+  salaryCompetitiveness  Float?   // 0-10 rating for salary competitiveness
+  benefitsScore          Float?   // 0-10 rating for benefits package
+  techCulture            Float?   // 0-10 rating for technical culture
+  
+  // Detailed analysis fields
+  pros                   String?  // JSON array of positive aspects
+  cons                   String?  // JSON array of negative aspects  
   hiringProcess          String?  // JSON string of process steps
   techStack              String?  // JSON string of technologies
-  workLifeBalance        Float?
-  careerGrowth           Float?
-  salaryCompetitiveness  Float?
-  benefitsScore          Float?
-  analysisSource         String   @default("ai_generated")
-  confidenceScore        Float?
+  benefits               String?  // JSON array of benefits offered
+  interviewProcess       String?  // JSON string of interview process details
+  growthOpportunities    String?  // JSON array of career growth opportunities
+  companyValues          String?  // JSON array of company values/mission
+  workEnvironment        String?  // Description of work environment
+  
+  // Meta information
+  analysisSource         String   @default("ai_generated") // ai_generated, manual, scraped
+  confidenceScore        Float?   // 0-100 confidence in analysis accuracy
+  dataCompleteness       Float?   // 0-100 how complete the source data was
+  recommendationScore    Float?   // 0-10 overall recommendation score
   rawData                String?  // JSON string of raw analysis data
+  sourceDataSummary      String?  // Summary of what sources were used
+  
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 

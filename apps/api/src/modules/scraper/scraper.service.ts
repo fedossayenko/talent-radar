@@ -4,6 +4,8 @@ import { Queue } from 'bull';
 import { DevBgScraper, DevBgJobListing } from './scrapers/dev-bg.scraper';
 import { VacancyService } from '../vacancy/vacancy.service';
 import { CompanyService } from '../company/company.service';
+import { CompanySourceService } from '../company/company-source.service';
+import { CompanyProfileScraper } from './services/company-profile.scraper';
 import { PrismaService } from '../../common/database/prisma.service';
 import { AiExtractionJobData } from './processors/scraper.processor';
 import * as crypto from 'crypto';
@@ -20,6 +22,17 @@ export interface ScrapingResult {
 export interface ScrapingOptions {
   limit?: number;
   enableAiExtraction?: boolean;
+  enableCompanyAnalysis?: boolean;
+}
+
+export interface CompanyAnalysisJobData {
+  companyId: string;
+  sourceSite: string;
+  sourceUrl: string;
+  content?: string;
+  analysisType: 'profile' | 'website';
+  priority: number;
+  maxRetries?: number;
 }
 
 @Injectable()
@@ -30,6 +43,8 @@ export class ScraperService {
     private readonly devBgScraper: DevBgScraper,
     private readonly vacancyService: VacancyService,
     private readonly companyService: CompanyService,
+    // private readonly companySourceService: CompanySourceService,
+    private readonly companyProfileScraper: CompanyProfileScraper,
     private readonly prisma: PrismaService,
     @InjectQueue('scraper') private readonly scraperQueue: Queue,
   ) {
@@ -37,9 +52,9 @@ export class ScraperService {
   }
 
   async scrapeDevBg(options: ScrapingOptions = {}): Promise<ScrapingResult> {
-    const { limit, enableAiExtraction = true } = options;
+    const { limit, enableAiExtraction = true, enableCompanyAnalysis = true } = options;
     const startTime = Date.now();
-    this.logger.log(`Starting dev.bg scraping process${limit ? ` (limit: ${limit} vacancies)` : ''}`);
+    this.logger.log(`Starting dev.bg scraping process${limit ? ` (limit: ${limit} vacancies)` : ''} (AI: ${enableAiExtraction}, Company: ${enableCompanyAnalysis})`);
 
     const result: ScrapingResult = {
       totalJobsFound: 0,
@@ -66,7 +81,7 @@ export class ScraperService {
       // Process each job listing
       for (const jobListing of jobsToProcess) {
         try {
-          await this.processJobListing(jobListing, result, enableAiExtraction);
+          await this.processJobListing(jobListing, result, enableAiExtraction, enableCompanyAnalysis);
         } catch (error) {
           this.logger.error(`Failed to process job listing: ${jobListing.title}`, error);
           result.errors.push(`Failed to process ${jobListing.title}: ${error.message}`);
@@ -91,7 +106,7 @@ export class ScraperService {
     return result;
   }
 
-  private async processJobListing(jobListing: DevBgJobListing, result: ScrapingResult, enableAiExtraction: boolean = true): Promise<void> {
+  private async processJobListing(jobListing: DevBgJobListing, result: ScrapingResult, enableAiExtraction: boolean = true, enableCompanyAnalysis: boolean = true): Promise<void> {
     try {
       // Find or create company
       const company = await this.companyService.findOrCreate({
@@ -107,12 +122,16 @@ export class ScraperService {
       // Fetch additional job details if URL is available
       let description = jobListing.description || '';
       let rawHtml = '';
+      let companyProfileUrl: string | undefined;
+      let companyWebsite: string | undefined;
 
       if (jobListing.url) {
         try {
           const jobDetails = await this.devBgScraper.fetchJobDetails(jobListing.url);
           description = jobDetails.description || description;
           rawHtml = jobDetails.rawHtml || '';
+          companyProfileUrl = jobDetails.companyProfileUrl;
+          companyWebsite = jobDetails.companyWebsite;
           // Note: requirements from job details are not currently used, 
           // using technologies from job listing instead
         } catch (error) {
@@ -172,6 +191,14 @@ export class ScraperService {
         await this.queueAiExtraction(vacancyId, contentForAi, jobListing.url);
       } else {
         this.logger.log(`Skipping AI extraction for vacancy ${vacancyId}: enableAiExtraction=${enableAiExtraction}, hasUrl=${!!jobListing.url}`);
+      }
+
+      // Process company URLs and queue company analysis if enabled
+      if (enableCompanyAnalysis && (companyProfileUrl || companyWebsite)) {
+        this.logger.log(`Company analysis check: enabled=${enableCompanyAnalysis}, profileUrl=${!!companyProfileUrl}, website=${!!companyWebsite}`);
+        await this.processCompanyUrls(company.id, companyProfileUrl, companyWebsite);
+      } else {
+        this.logger.log(`Skipping company analysis: enabled=${enableCompanyAnalysis}, profileUrl=${!!companyProfileUrl}, website=${!!companyWebsite}`);
       }
 
     } catch (error) {
@@ -304,6 +331,101 @@ export class ScraperService {
       this.logger.log(`Queued AI extraction job for vacancy ${vacancyId}`);
     } catch (error) {
       this.logger.error(`Failed to queue AI extraction for vacancy ${vacancyId}:`, error);
+    }
+  }
+
+  /**
+   * Process company URLs and queue analysis jobs if needed
+   */
+  private async processCompanyUrls(companyId: string, companyProfileUrl?: string, companyWebsite?: string): Promise<void> {
+    try {
+      // Process dev.bg company profile URL if available
+      if (companyProfileUrl) {
+        await this.processCompanySource(companyId, 'dev.bg', companyProfileUrl, 'profile');
+      }
+
+      // Process company website URL if available
+      if (companyWebsite) {
+        await this.processCompanySource(companyId, 'company_website', companyWebsite, 'website');
+      }
+
+    } catch (error) {
+      this.logger.error(`Failed to process company URLs for company ${companyId}:`, error);
+    }
+  }
+
+  /**
+   * Process a single company source and queue analysis if needed
+   */
+  private async processCompanySource(
+    companyId: string,
+    sourceSite: string,
+    sourceUrl: string,
+    analysisType: 'profile' | 'website'
+  ): Promise<void> {
+    try {
+      // TEMPORARILY DISABLED FOR TESTING
+      // Check if we should scrape this company source
+      // const cacheCheck = await this.companySourceService.shouldScrapeCompanySource(
+      //   companyId,
+      //   sourceSite,
+      //   sourceUrl
+      // );
+
+      // this.logger.log(`Company source check for ${sourceSite}: ${cacheCheck.reason}`);
+
+      // if (cacheCheck.shouldScrape) {
+        // Validate the company URL first
+        const validation = await this.companyProfileScraper.validateCompanyUrl(sourceUrl);
+        
+        if (validation.isValid) {
+          // Queue company analysis job
+          await this.queueCompanyAnalysis(companyId, sourceSite, sourceUrl, analysisType);
+        } else {
+          this.logger.warn(`Invalid company URL for ${sourceSite}: ${sourceUrl} - ${validation.error}`);
+          // Mark source as invalid in the database
+          // await this.companySourceService.markSourceAsInvalid(companyId, sourceSite, validation.error);
+        }
+      // }
+
+    } catch (error) {
+      this.logger.error(`Failed to process company source ${sourceSite} for company ${companyId}:`, error);
+    }
+  }
+
+  /**
+   * Queue company analysis job
+   */
+  private async queueCompanyAnalysis(
+    companyId: string,
+    sourceSite: string,
+    sourceUrl: string,
+    analysisType: 'profile' | 'website'
+  ): Promise<void> {
+    try {
+      const companyAnalysisData: CompanyAnalysisJobData = {
+        companyId,
+        sourceSite,
+        sourceUrl,
+        analysisType,
+        priority: 3, // Lower priority than vacancy extraction
+        maxRetries: 2,
+      };
+
+      await this.scraperQueue.add('company-analysis', companyAnalysisData, {
+        priority: 3,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 10000, // Longer delay for company analysis
+        },
+        removeOnComplete: 50,
+        removeOnFail: 25,
+      });
+
+      this.logger.log(`Queued company analysis job for ${analysisType}: ${sourceUrl}`);
+    } catch (error) {
+      this.logger.error(`Failed to queue company analysis for ${sourceSite}:`, error);
     }
   }
 }

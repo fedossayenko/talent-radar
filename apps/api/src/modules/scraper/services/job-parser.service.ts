@@ -133,4 +133,95 @@ export class JobParserService {
     const bulgariandateMatch = text.match(/(\d{1,2})\s+(януари|февруари|март|април|май|юни|юли|август|септември|октомври|ноември|декември)/i);
     return bulgariandateMatch ? bulgariandateMatch[0] : null;
   }
+
+  /**
+   * Extracts company URLs from job details page HTML
+   */
+  extractCompanyUrls(html: string): { profileUrl?: string; website?: string } {
+    try {
+      const $ = cheerio.load(html);
+      
+      // Look for dev.bg company profile URL
+      // These are typically found in company name links or dedicated company sections
+      let profileUrl: string | undefined;
+      
+      // Check for company profile links (usually /company/ URLs)
+      const companyLinks = $('a[href*="/company/"]');
+      companyLinks.each((_, element) => {
+        const href = $(element).attr('href');
+        if (href && href.includes('/company/') && !profileUrl) {
+          profileUrl = href.startsWith('http') ? href : `https://dev.bg${href}`;
+        }
+      });
+      
+      // Look for external company website links
+      let website: string | undefined;
+      
+      // Common patterns for company websites
+      const websitePatterns = [
+        'a[href*="www."]',
+        'a[href^="http"][href*=".com"]',
+        'a[href^="http"][href*=".bg"]',
+        'a[href^="https://"]',
+        'a.company-website',
+        'a.external-link',
+        '.company-info a[href^="http"]'
+      ];
+      
+      for (const pattern of websitePatterns) {
+        const links = $(pattern);
+        links.each((_, element) => {
+          const href = $(element).attr('href');
+          const linkText = $(element).text().toLowerCase();
+          
+          // Skip dev.bg URLs and social media/job boards
+          if (href && 
+              !href.includes('dev.bg') && 
+              !href.includes('linkedin.com') &&
+              !href.includes('facebook.com') &&
+              !href.includes('twitter.com') &&
+              !href.includes('jobs.bg') &&
+              !website) {
+            
+            // Prefer links that look like company websites
+            if (linkText.includes('website') || 
+                linkText.includes('сайт') ||
+                href.match(/^https?:\/\/[a-zA-Z0-9\-_.]+\.(com|bg|org|net|io)/) ||
+                href.match(/^https?:\/\/(www\.)?[a-zA-Z0-9\-_.]+\.[a-zA-Z]{2,}$/)) {
+              website = href;
+            }
+          }
+        });
+        
+        if (website) break; // Found a website, stop looking
+      }
+      
+      // Also check for URLs in text content as fallback
+      if (!website) {
+        const urlMatches = html.match(/https?:\/\/(www\.)?[a-zA-Z0-9\-_.]+\.[a-zA-Z]{2,}[^\s<>"']*/g);
+        if (urlMatches) {
+          for (const url of urlMatches) {
+            if (!url.includes('dev.bg') && 
+                !url.includes('linkedin.com') &&
+                !url.includes('facebook.com') &&
+                url.match(/\.(com|bg|org|net|io|eu)/)) {
+              website = url;
+              break;
+            }
+          }
+        }
+      }
+      
+      this.logger.log(`Extracted company URLs - Profile: ${profileUrl}, Website: ${website}`);
+      
+      return {
+        profileUrl,
+        website
+      };
+      
+    } catch (error) {
+      this.logger.error('Error extracting company URLs:', error.message);
+      return {};
+    }
+  }
 }

@@ -47,7 +47,17 @@ describe('CompanyService', () => {
 
       // Assert
       expect(result.success).toBe(true);
-      expect(result.data).toEqual(mockCompanies);
+      expect(result.data).toEqual(
+        mockCompanies.map(company => ({
+          ...company,
+          analyses: undefined,
+          analysisScore: null,
+          hasAnalysis: false,
+          analysisAge: null,
+          recommendation: null,
+          scores: null,
+        }))
+      );
       expect(result.pagination).toEqual({
         page: 1,
         limit: 20,
@@ -62,6 +72,15 @@ describe('CompanyService', () => {
           analyses: {
             orderBy: { createdAt: 'desc' },
             take: 1,
+            select: {
+              recommendationScore: true,
+              cultureScore: true,
+              workLifeBalance: true,
+              careerGrowth: true,
+              techCulture: true,
+              confidenceScore: true,
+              createdAt: true,
+            },
           },
           _count: {
             select: {
@@ -323,6 +342,211 @@ describe('CompanyService', () => {
       await expect(service.analyzeCompany(companyId)).rejects.toThrow(
         new NotFoundException(`Company with ID ${companyId} not found`)
       );
+    });
+  });
+
+  describe('createOrUpdateAnalysis', () => {
+    it('should create new company analysis successfully', async () => {
+      // Arrange
+      const companyId = '123';
+      const analysisData = {
+        analysisSource: 'ai_generated' as const,
+        confidenceScore: 0.85,
+        dataCompleteness: 0.9,
+        name: 'Tech Corp',
+        industry: 'Technology',
+        location: 'Sofia, Bulgaria',
+        size: '100-500',
+        description: 'Leading technology company',
+        technologies: ['JavaScript', 'TypeScript', 'React'],
+        pros: ['Great work-life balance', 'Modern tech stack'],
+        cons: ['Remote work limited'],
+        cultureScore: 8.5,
+        workLifeBalance: 9.0,
+        careerGrowth: 7.5,
+        compensation: 8.0,
+        techCulture: 9.5,
+        workEnvironment: 8.0,
+      };
+
+      const mockAnalysis = MockDataFactory.createCompanyAnalysisData(companyId, analysisData);
+      prismaService.companyAnalysis.create.mockResolvedValue(mockAnalysis);
+
+      // Act
+      const result = await service.createOrUpdateAnalysis({
+        companyId,
+        ...analysisData,
+      });
+
+      // Assert
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockAnalysis);
+      expect(result.message).toBe('Company analysis created successfully');
+
+      expect(prismaService.companyAnalysis.create).toHaveBeenCalledWith({
+        data: {
+          companyId,
+          analysisSource: analysisData.analysisSource,
+          confidenceScore: analysisData.confidenceScore,
+          dataCompleteness: analysisData.dataCompleteness,
+          name: analysisData.name,
+          industry: analysisData.industry,
+          location: analysisData.location,
+          size: analysisData.size,
+          description: analysisData.description,
+          pros: analysisData.pros,
+          cons: analysisData.cons,
+          cultureScore: analysisData.cultureScore,
+          workLifeBalance: analysisData.workLifeBalance,
+          careerGrowth: analysisData.careerGrowth,
+          compensation: analysisData.compensation,
+          techCulture: analysisData.techCulture,
+          workEnvironment: analysisData.workEnvironment,
+          techStack: JSON.stringify(analysisData.technologies),
+          createdAt: expect.any(Date),
+        },
+      });
+    });
+
+    it('should handle analysis creation with minimal required fields', async () => {
+      // Arrange
+      const companyId = '123';
+      const minimalAnalysisData = {
+        analysisSource: 'manual' as const,
+        confidenceScore: 0.7,
+        dataCompleteness: 0.5,
+      };
+
+      const mockAnalysis = MockDataFactory.createCompanyAnalysisData(companyId, minimalAnalysisData);
+      prismaService.companyAnalysis.create.mockResolvedValue(mockAnalysis);
+
+      // Act
+      const result = await service.createOrUpdateAnalysis({
+        companyId,
+        ...minimalAnalysisData,
+      });
+
+      // Assert
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockAnalysis);
+      expect(prismaService.companyAnalysis.create).toHaveBeenCalledWith({
+        data: {
+          companyId,
+          ...minimalAnalysisData,
+          createdAt: expect.any(Date),
+        },
+      });
+    });
+
+    it('should handle database errors during analysis creation', async () => {
+      // Arrange
+      const companyId = '123';
+      const analysisData = {
+        analysisSource: 'ai_generated' as const,
+        confidenceScore: 0.85,
+        dataCompleteness: 0.9,
+      };
+
+      const error = new Error('Database connection failed');
+      prismaService.companyAnalysis.create.mockRejectedValue(error);
+
+      // Act & Assert
+      await expect(service.createOrUpdateAnalysis({
+        companyId,
+        ...analysisData,
+      })).rejects.toThrow(error);
+    });
+
+    it('should create analysis with all optional fields populated', async () => {
+      // Arrange
+      const companyId = '123';
+      const completeAnalysisData = {
+        analysisSource: 'scraped_profile' as const,
+        confidenceScore: 0.95,
+        dataCompleteness: 1.0,
+        name: 'Complete Tech Corp',
+        industry: 'Software Development',
+        location: 'Sofia, Bulgaria',
+        size: '500+',
+        description: 'Comprehensive technology solutions provider',
+        technologies: ['JavaScript', 'Python', 'AWS', 'Docker', 'Kubernetes'],
+        benefits: ['Health insurance', 'Flexible hours', 'Remote work'],
+        pros: ['Excellent benefits', 'Modern technology stack', 'Great team culture'],
+        cons: ['Fast-paced environment', 'High expectations'],
+        cultureScore: 9.2,
+        workLifeBalance: 8.8,
+        careerGrowth: 8.5,
+        compensation: 9.0,
+        techCulture: 9.8,
+        workEnvironment: 8.7,
+      };
+
+      const mockAnalysis = MockDataFactory.createCompanyAnalysisData(companyId, completeAnalysisData);
+      prismaService.companyAnalysis.create.mockResolvedValue(mockAnalysis);
+
+      // Act
+      const result = await service.createOrUpdateAnalysis({
+        companyId,
+        ...completeAnalysisData,
+      });
+
+      // Assert
+      expect(result.success).toBe(true);
+      expect(result.data).toEqual(mockAnalysis);
+      expect(prismaService.companyAnalysis.create).toHaveBeenCalledWith({
+        data: {
+          companyId,
+          analysisSource: completeAnalysisData.analysisSource,
+          confidenceScore: completeAnalysisData.confidenceScore,
+          dataCompleteness: completeAnalysisData.dataCompleteness,
+          name: completeAnalysisData.name,
+          industry: completeAnalysisData.industry,
+          location: completeAnalysisData.location,
+          size: completeAnalysisData.size,
+          description: completeAnalysisData.description,
+          benefits: completeAnalysisData.benefits,
+          pros: completeAnalysisData.pros,
+          cons: completeAnalysisData.cons,
+          cultureScore: completeAnalysisData.cultureScore,
+          workLifeBalance: completeAnalysisData.workLifeBalance,
+          careerGrowth: completeAnalysisData.careerGrowth,
+          compensation: completeAnalysisData.compensation,
+          techCulture: completeAnalysisData.techCulture,
+          workEnvironment: completeAnalysisData.workEnvironment,
+          techStack: JSON.stringify(completeAnalysisData.technologies),
+          createdAt: expect.any(Date),
+        },
+      });
+    });
+
+    it('should validate analysis source enum values', async () => {
+      // Arrange
+      const companyId = '123';
+      const validSources = ['ai_generated', 'scraped_profile', 'manual', 'scraped_website'];
+
+      for (const source of validSources) {
+        const analysisData = {
+          analysisSource: source as any,
+          confidenceScore: 0.8,
+          dataCompleteness: 0.8,
+        };
+
+        const mockAnalysis = MockDataFactory.createCompanyAnalysisData(companyId, analysisData);
+        prismaService.companyAnalysis.create.mockResolvedValue(mockAnalysis);
+
+        // Act
+        const result = await service.createOrUpdateAnalysis({
+          companyId,
+          ...analysisData,
+        });
+
+        // Assert
+        expect(result.success).toBe(true);
+        expect(result.data.analysisSource).toBe(source);
+      }
+
+      // Verify all valid sources were tested
+      expect(prismaService.companyAnalysis.create).toHaveBeenCalledTimes(validSources.length);
     });
   });
 });

@@ -1,10 +1,13 @@
 import { Process, Processor } from '@nestjs/bull';
 import { Logger } from '@nestjs/common';
 import * as Bull from 'bull';
-import { ScraperService, ScrapingResult } from '../scraper.service';
+import { ScraperService, ScrapingResult, CompanyAnalysisJobData } from '../scraper.service';
 import { AiService, VacancyExtractionResult } from '../../ai/ai.service';
 import { AiProcessingPipelineService, PipelineResult } from '../services/ai-processing-pipeline.service';
 import { VacancyService } from '../../vacancy/vacancy.service';
+import { CompanyService } from '../../company/company.service';
+import { CompanySourceService } from '../../company/company-source.service';
+import { CompanyProfileScraper } from '../services/company-profile.scraper';
 
 export interface ScrapingJobData {
   source: string;
@@ -39,7 +42,7 @@ export interface HealthCheckJobData {
   timestamp?: number; // Optional timestamp for health check jobs
 }
 
-export type AllJobData = ScrapingJobData | AiExtractionJobData | BatchProcessingJobData | HealthCheckJobData;
+export type AllJobData = ScrapingJobData | AiExtractionJobData | BatchProcessingJobData | HealthCheckJobData | CompanyAnalysisJobData;
 
 @Processor('scraper')
 export class ScraperProcessor {
@@ -50,6 +53,9 @@ export class ScraperProcessor {
     private readonly aiService: AiService,
     private readonly aiPipelineService: AiProcessingPipelineService,
     private readonly vacancyService: VacancyService,
+    private readonly companyService: CompanyService,
+    private readonly companySourceService: CompanySourceService,
+    private readonly companyProfileScraper: CompanyProfileScraper,
   ) {}
 
   @Process('scrape-dev-bg')
@@ -267,6 +273,187 @@ export class ScraperProcessor {
     } catch (error) {
       results.duration = Date.now() - startTime;
       this.logger.error(`Batch processing job ${job.id} failed:`, error);
+      throw error;
+    }
+  }
+
+  @Process({ name: 'company-analysis', concurrency: 2 })
+  async handleCompanyAnalysis(job: Bull.Job<CompanyAnalysisJobData>): Promise<any> {
+    const { data } = job;
+    
+    this.logger.log(`Starting company analysis job ${job.id}`, {
+      companyId: data.companyId,
+      sourceSite: data.sourceSite,
+      sourceUrl: data.sourceUrl,
+      analysisType: data.analysisType,
+      priority: data.priority,
+    });
+
+    try {
+      // Update job progress
+      await job.progress(10);
+
+      // Check if AI service is configured
+      if (!this.aiService.isConfigured()) {
+        this.logger.warn('AI service not configured, skipping company analysis');
+        return {
+          success: false,
+          error: 'AI service not configured',
+          companyId: data.companyId,
+          sourceSite: data.sourceSite,
+        };
+      }
+
+      await job.progress(20);
+
+      // Scrape company content
+      let scrapingResult;
+      if (data.analysisType === 'profile' && data.sourceSite === 'dev.bg') {
+        scrapingResult = await this.companyProfileScraper.scrapeDevBgCompanyProfile(data.sourceUrl);
+      } else if (data.analysisType === 'website') {
+        scrapingResult = await this.companyProfileScraper.scrapeCompanyWebsite(data.sourceUrl);
+      } else {
+        throw new Error(`Unsupported analysis type: ${data.analysisType} for source: ${data.sourceSite}`);
+      }
+
+      if (!scrapingResult.success) {
+        this.logger.warn(`Failed to scrape company content: ${scrapingResult.error}`);
+        // Mark source as invalid
+        await this.companySourceService.markSourceAsInvalid(
+          data.companyId, 
+          data.sourceSite, 
+          scrapingResult.error
+        );
+        
+        return {
+          success: false,
+          error: scrapingResult.error,
+          companyId: data.companyId,
+          sourceSite: data.sourceSite,
+        };
+      }
+
+      await job.progress(50);
+
+      // Save scraped content to CompanySource
+      await this.companySourceService.saveCompanySource({
+        companyId: data.companyId,
+        sourceSite: data.sourceSite,
+        sourceUrl: data.sourceUrl,
+        scrapedContent: scrapingResult.data?.rawContent,
+        isValid: true,
+      });
+
+      await job.progress(70);
+
+      // Analyze content with AI
+      let analysisResult;
+      const content = scrapingResult.data?.rawContent || '';
+      
+      if (data.analysisType === 'profile') {
+        analysisResult = await this.aiService.analyzeCompanyProfile(content, data.sourceUrl);
+      } else {
+        analysisResult = await this.aiService.analyzeCompanyWebsite(content, data.sourceUrl);
+      }
+
+      if (!analysisResult) {
+        this.logger.warn(`AI analysis failed for company ${data.companyId}`);
+        return {
+          success: false,
+          error: 'AI analysis failed',
+          companyId: data.companyId,
+          sourceSite: data.sourceSite,
+        };
+      }
+
+      await job.progress(90);
+
+      // Save analysis results to company
+      await this.saveCompanyAnalysis(data.companyId, analysisResult, data.sourceSite);
+
+      await job.progress(100);
+
+      this.logger.log(`Company analysis job ${job.id} completed successfully`, {
+        companyId: data.companyId,
+        sourceSite: data.sourceSite,
+        confidenceScore: analysisResult.confidenceScore,
+        dataCompleteness: analysisResult.dataCompleteness,
+      });
+
+      return {
+        success: true,
+        companyId: data.companyId,
+        sourceSite: data.sourceSite,
+        analysisResult,
+      };
+
+    } catch (error) {
+      this.logger.error(`Company analysis job ${job.id} failed:`, error);
+      
+      // Check if we should retry
+      const retryCount = (job.opts.attempts || 1) - (job.attemptsMade || 0);
+      const maxRetries = data.maxRetries || 3;
+      
+      if (retryCount > 0 && retryCount < maxRetries) {
+        this.logger.log(`Retrying company analysis job ${job.id} (attempt ${retryCount}/${maxRetries})`);
+        throw new Error(`Retry attempt ${retryCount}/${maxRetries}: ${error.message}`);
+      }
+      
+      throw error;
+    }
+  }
+
+  /**
+   * Save company analysis results to database
+   */
+  private async saveCompanyAnalysis(companyId: string, analysisResult: any, sourceSite: string): Promise<void> {
+    try {
+      // Update company with basic info if available
+      if (analysisResult.name || analysisResult.description || analysisResult.industry) {
+        const companyUpdateData: any = {};
+        
+        if (analysisResult.name) companyUpdateData.name = analysisResult.name;
+        if (analysisResult.description) companyUpdateData.description = analysisResult.description;
+        if (analysisResult.industry) companyUpdateData.industry = analysisResult.industry;
+        if (analysisResult.location) companyUpdateData.location = analysisResult.location;
+        if (analysisResult.website) companyUpdateData.website = analysisResult.website;
+        if (analysisResult.size) companyUpdateData.size = analysisResult.size;
+        if (analysisResult.founded) companyUpdateData.founded = analysisResult.founded;
+        if (analysisResult.employeeCount) companyUpdateData.employeeCount = analysisResult.employeeCount;
+
+        await this.companyService.update(companyId, companyUpdateData);
+      }
+
+      // Create or update company analysis
+      const analysisData = {
+        companyId,
+        analysisSource: sourceSite,
+        recommendationScore: analysisResult.recommendationScore || null,
+        pros: analysisResult.pros ? JSON.stringify(analysisResult.pros) : null,
+        cons: analysisResult.cons ? JSON.stringify(analysisResult.cons) : null,
+        cultureScore: analysisResult.cultureScore || null,
+        workLifeBalance: analysisResult.workLifeBalance || null,
+        careerGrowth: analysisResult.careerGrowth || null,
+        salaryCompetitiveness: analysisResult.salaryCompetitiveness || null,
+        benefitsScore: analysisResult.benefitsScore || null,
+        techCulture: analysisResult.techCulture || null,
+        retentionRate: analysisResult.retentionRate || null,
+        workEnvironment: analysisResult.workEnvironment || null,
+        interviewProcess: analysisResult.interviewProcess || null,
+        growthOpportunities: analysisResult.growthOpportunities ? JSON.stringify(analysisResult.growthOpportunities) : null,
+        benefits: analysisResult.benefits ? JSON.stringify(analysisResult.benefits) : null,
+        techStack: analysisResult.technologies ? JSON.stringify(analysisResult.technologies) : null,
+        companyValues: analysisResult.values ? JSON.stringify(analysisResult.values) : null,
+        confidenceScore: analysisResult.confidenceScore || 0,
+        rawData: JSON.stringify(analysisResult),
+      };
+
+      await this.companyService.createOrUpdateAnalysis(analysisData);
+      
+      this.logger.log(`Saved company analysis for company ${companyId} from ${sourceSite}`);
+
+    } catch (error) {
+      this.logger.error(`Failed to save company analysis for company ${companyId}:`, error);
       throw error;
     }
   }

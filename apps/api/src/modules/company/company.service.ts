@@ -14,6 +14,9 @@ export class CompanyService {
       search,
       industry,
       size,
+      sortBy = 'name',
+      sortOrder,
+      hasAnalysis,
     } = query;
 
     this.logger.log(`Finding companies with filters: ${JSON.stringify(query)}`);
@@ -36,7 +39,29 @@ export class CompanyService {
         where.size = size;
       }
 
+      if (hasAnalysis === true) {
+        where.analyses = {
+          some: {},
+        };
+      } else if (hasAnalysis === false) {
+        where.analyses = {
+          none: {},
+        };
+      }
+
       const total = await this.prisma.company.count({ where });
+
+      // Determine sort order based on field
+      const defaultSortOrder = sortBy === 'name' ? 'asc' : 'desc';
+      const finalSortOrder = sortOrder || defaultSortOrder;
+
+      let orderBy: any = { name: 'asc' };
+      if (sortBy === 'name') {
+        orderBy = { name: finalSortOrder };
+      } else {
+        // For score-based sorting, we'll sort in memory after fetching
+        orderBy = { name: 'asc' };
+      }
 
       const companies = await this.prisma.company.findMany({
         where,
@@ -44,6 +69,15 @@ export class CompanyService {
           analyses: {
             orderBy: { createdAt: 'desc' },
             take: 1,
+            select: {
+              recommendationScore: true,
+              cultureScore: true,
+              workLifeBalance: true,
+              careerGrowth: true,
+              techCulture: true,
+              confidenceScore: true,
+              createdAt: true,
+            },
           },
           _count: {
             select: {
@@ -53,14 +87,53 @@ export class CompanyService {
             },
           },
         },
-        orderBy: { name: 'asc' },
+        orderBy,
         skip: (page - 1) * limit,
         take: limit,
       });
 
+      // Process companies with analysis summary
+      const processedCompanies = companies.map(company => {
+        const latestAnalysis = company.analyses?.[0];
+        return {
+          ...company,
+          analyses: undefined, // Remove full analyses from list view
+          analysisScore: latestAnalysis?.recommendationScore || null,
+          hasAnalysis: !!latestAnalysis,
+          analysisAge: latestAnalysis ? Math.floor((Date.now() - latestAnalysis.createdAt.getTime()) / (1000 * 60 * 60 * 24)) : null,
+          recommendation: latestAnalysis ? this.getRecommendationLevel(latestAnalysis.recommendationScore) : null,
+          scores: latestAnalysis ? {
+            overall: latestAnalysis.recommendationScore,
+            culture: latestAnalysis.cultureScore,
+            workLife: latestAnalysis.workLifeBalance,
+            career: latestAnalysis.careerGrowth,
+            tech: latestAnalysis.techCulture,
+          } : null,
+        };
+      });
+
+      // Apply score-based sorting if needed
+      if (sortBy !== 'name') {
+        processedCompanies.sort((a, b) => {
+          const aScore = this.getScoreByMetric(a.scores, sortBy);
+          const bScore = this.getScoreByMetric(b.scores, sortBy);
+          
+          // Handle null scores (companies without analysis)
+          if (aScore === null && bScore === null) return 0;
+          if (aScore === null) return 1; // null scores go to end
+          if (bScore === null) return -1;
+          
+          return finalSortOrder === 'desc' ? (bScore - aScore) : (aScore - bScore);
+        });
+      }
+
+      // Apply pagination after sorting
+      const startIndex = (page - 1) * limit;
+      const paginatedCompanies = processedCompanies.slice(startIndex, startIndex + limit);
+
       return {
         success: true,
-        data: companies,
+        data: paginatedCompanies,
         pagination: {
           page,
           limit,
@@ -267,5 +340,394 @@ export class CompanyService {
       this.logger.error(`Failed to analyze company ${id}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Create or update company analysis from scraped and AI-analyzed data
+   */
+  async createOrUpdateAnalysis(analysisData: {
+    companyId: string;
+    analysisSource: string;
+    recommendationScore?: number;
+    pros?: string;
+    cons?: string;
+    cultureScore?: number;
+    workLifeBalance?: number;
+    careerGrowth?: number;
+    salaryCompetitiveness?: number;
+    benefitsScore?: number;
+    techCulture?: number;
+    retentionRate?: number;
+    workEnvironment?: string;
+    interviewProcess?: string;
+    growthOpportunities?: string;
+    benefits?: string;
+    techStack?: string;
+    companyValues?: string;
+    confidenceScore?: number;
+    rawData?: string;
+    dataCompleteness?: number;
+    name?: string;
+    industry?: string;
+    location?: string;
+    size?: string;
+    description?: string;
+    technologies?: string[];
+  }) {
+    this.logger.log(`Creating/updating company analysis for company ${analysisData.companyId} from ${analysisData.analysisSource}`);
+
+    try {
+      // Check if analysis already exists for this company and source
+      const existingAnalysis = await this.prisma.companyAnalysis.findFirst({
+        where: {
+          companyId: analysisData.companyId,
+          analysisSource: analysisData.analysisSource,
+        },
+      });
+
+      let analysis;
+      let message;
+      if (existingAnalysis) {
+        // Update existing analysis
+        const { technologies, ...dbData } = analysisData;
+        analysis = await this.prisma.companyAnalysis.update({
+          where: { id: existingAnalysis.id },
+          data: {
+            ...dbData,
+            techStack: technologies ? JSON.stringify(technologies) : dbData.techStack,
+            updatedAt: new Date(),
+          },
+        });
+        message = 'Company analysis updated successfully';
+        this.logger.log(`Updated existing company analysis for ${analysisData.companyId}`);
+      } else {
+        // Create new analysis
+        const { technologies, ...dbData } = analysisData;
+        analysis = await this.prisma.companyAnalysis.create({
+          data: {
+            ...dbData,
+            techStack: technologies ? JSON.stringify(technologies) : dbData.techStack,
+            createdAt: new Date(),
+          },
+        });
+        message = 'Company analysis created successfully';
+        this.logger.log(`Created new company analysis for ${analysisData.companyId}`);
+      }
+
+      return {
+        success: true,
+        data: analysis,
+        message,
+      };
+
+    } catch (error) {
+      this.logger.error(`Failed to create/update company analysis for ${analysisData.companyId}:`, error);
+      throw error;
+    }
+  }
+
+  async getCompanyAnalysis(companyId: string) {
+    this.logger.log(`Getting all analysis data for company ${companyId}`);
+
+    try {
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyId },
+        include: {
+          analyses: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              analysisSource: true,
+              recommendationScore: true,
+              pros: true,
+              cons: true,
+              cultureScore: true,
+              workLifeBalance: true,
+              careerGrowth: true,
+              salaryCompetitiveness: true,
+              benefitsScore: true,
+              techCulture: true,
+              retentionRate: true,
+              workEnvironment: true,
+              interviewProcess: true,
+              growthOpportunities: true,
+              benefits: true,
+              techStack: true,
+              companyValues: true,
+              confidenceScore: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          },
+        },
+      });
+
+      if (!company) {
+        throw new NotFoundException(`Company with ID ${companyId} not found`);
+      }
+
+      // Parse JSON fields for better API response
+      const processedAnalyses = company.analyses.map(analysis => ({
+        ...analysis,
+        pros: analysis.pros ? JSON.parse(analysis.pros) : [],
+        cons: analysis.cons ? JSON.parse(analysis.cons) : [],
+        growthOpportunities: analysis.growthOpportunities ? JSON.parse(analysis.growthOpportunities) : [],
+        benefits: analysis.benefits ? JSON.parse(analysis.benefits) : [],
+        technologies: analysis.techStack ? JSON.parse(analysis.techStack) : [],
+        values: analysis.companyValues ? JSON.parse(analysis.companyValues) : [],
+      }));
+
+      return {
+        success: true,
+        data: {
+          company: {
+            id: company.id,
+            name: company.name,
+            description: company.description,
+            industry: company.industry,
+            size: company.size,
+            location: company.location,
+            website: company.website,
+          },
+          analyses: processedAnalyses,
+          analysisCount: processedAnalyses.length,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get company analysis for ${companyId}:`, error);
+      throw error;
+    }
+  }
+
+  async getLatestAnalysis(companyId: string) {
+    this.logger.log(`Getting latest analysis for company ${companyId}`);
+
+    try {
+      const latestAnalysis = await this.prisma.companyAnalysis.findFirst({
+        where: { companyId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          company: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              industry: true,
+              size: true,
+              location: true,
+              website: true,
+            },
+          },
+        },
+      });
+
+      if (!latestAnalysis) {
+        throw new NotFoundException(`No analysis found for company ${companyId}`);
+      }
+
+      // Parse JSON fields
+      const processedAnalysis = {
+        ...latestAnalysis,
+        pros: latestAnalysis.pros ? JSON.parse(latestAnalysis.pros) : [],
+        cons: latestAnalysis.cons ? JSON.parse(latestAnalysis.cons) : [],
+        growthOpportunities: latestAnalysis.growthOpportunities ? JSON.parse(latestAnalysis.growthOpportunities) : [],
+        benefits: latestAnalysis.benefits ? JSON.parse(latestAnalysis.benefits) : [],
+        technologies: latestAnalysis.techStack ? JSON.parse(latestAnalysis.techStack) : [],
+        values: latestAnalysis.companyValues ? JSON.parse(latestAnalysis.companyValues) : [],
+        rawData: undefined, // Don't expose raw data in API
+      };
+
+      return {
+        success: true,
+        data: processedAnalysis,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get latest analysis for company ${companyId}:`, error);
+      throw error;
+    }
+  }
+
+  async getCompanyInsights(companyId: string) {
+    this.logger.log(`Getting company insights for ${companyId}`);
+
+    try {
+      const company = await this.prisma.company.findUnique({
+        where: { id: companyId },
+        include: {
+          analyses: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+          _count: {
+            select: {
+              vacancies: {
+                where: { status: 'active' },
+              },
+            },
+          },
+        },
+      });
+
+      if (!company) {
+        throw new NotFoundException(`Company with ID ${companyId} not found`);
+      }
+
+      const latestAnalysis = company.analyses[0];
+      const insights: any = {
+        company: {
+          id: company.id,
+          name: company.name,
+          description: company.description,
+          industry: company.industry,
+          size: company.size,
+          location: company.location,
+          website: company.website,
+          activeVacancies: company._count.vacancies,
+        },
+        hasAnalysis: !!latestAnalysis,
+        analysisAge: latestAnalysis ? Math.floor((Date.now() - latestAnalysis.createdAt.getTime()) / (1000 * 60 * 60 * 24)) : null,
+      };
+
+      if (latestAnalysis) {
+        insights.scores = {
+          overall: latestAnalysis.recommendationScore,
+          culture: latestAnalysis.cultureScore,
+          workLifeBalance: latestAnalysis.workLifeBalance,
+          careerGrowth: latestAnalysis.careerGrowth,
+          salaryCompetitiveness: latestAnalysis.salaryCompetitiveness,
+          benefits: latestAnalysis.benefitsScore,
+          techCulture: latestAnalysis.techCulture,
+          retention: latestAnalysis.retentionRate,
+          confidence: latestAnalysis.confidenceScore,
+        };
+
+        insights.highlights = {
+          topPros: latestAnalysis.pros ? JSON.parse(latestAnalysis.pros).slice(0, 3) : [],
+          mainConcerns: latestAnalysis.cons ? JSON.parse(latestAnalysis.cons).slice(0, 2) : [],
+          keyTechnologies: latestAnalysis.techStack ? JSON.parse(latestAnalysis.techStack).slice(0, 5) : [],
+          coreValues: latestAnalysis.companyValues ? JSON.parse(latestAnalysis.companyValues).slice(0, 3) : [],
+        };
+
+        insights.recommendation = this.getRecommendationLevel(latestAnalysis.recommendationScore);
+      }
+
+      return {
+        success: true,
+        data: insights,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get company insights for ${companyId}:`, error);
+      throw error;
+    }
+  }
+
+  async getTopRatedCompanies(limit = 20, metric = 'overall') {
+    this.logger.log(`Getting top-rated companies (limit: ${limit}, metric: ${metric})`);
+
+    try {
+      const orderByField = this.getMetricField(metric);
+      
+      const companies = await this.prisma.company.findMany({
+        include: {
+          analyses: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            where: {
+              [orderByField]: {
+                not: null,
+              },
+            },
+          },
+          _count: {
+            select: {
+              vacancies: {
+                where: { status: 'active' },
+              },
+            },
+          },
+        },
+        take: limit,
+      });
+
+      // Filter companies that have analyses and sort by the selected metric
+      const companiesWithAnalysis = companies
+        .filter(company => company.analyses.length > 0)
+        .map(company => {
+          const analysis = company.analyses[0];
+          return {
+            id: company.id,
+            name: company.name,
+            description: company.description,
+            industry: company.industry,
+            size: company.size,
+            location: company.location,
+            website: company.website,
+            activeVacancies: company._count.vacancies,
+            scores: {
+              overall: analysis.recommendationScore,
+              culture: analysis.cultureScore,
+              workLifeBalance: analysis.workLifeBalance,
+              careerGrowth: analysis.careerGrowth,
+              salaryCompetitiveness: analysis.salaryCompetitiveness,
+              benefits: analysis.benefitsScore,
+              techCulture: analysis.techCulture,
+              retention: analysis.retentionRate,
+              confidence: analysis.confidenceScore,
+            },
+            analysisAge: Math.floor((Date.now() - analysis.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
+            recommendation: this.getRecommendationLevel(analysis.recommendationScore),
+          };
+        })
+        .sort((a, b) => {
+          const aScore = this.getScoreByMetric(a.scores, metric);
+          const bScore = this.getScoreByMetric(b.scores, metric);
+          return (bScore || 0) - (aScore || 0);
+        })
+        .slice(0, limit);
+
+      return {
+        success: true,
+        data: {
+          companies: companiesWithAnalysis,
+          total: companiesWithAnalysis.length,
+          sortedBy: metric,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get top-rated companies:`, error);
+      throw error;
+    }
+  }
+
+  private getMetricField(metric: string): string {
+    const fieldMap: Record<string, string> = {
+      overall: 'recommendationScore',
+      culture: 'cultureScore',
+      workLife: 'workLifeBalance',
+      career: 'careerGrowth',
+      tech: 'techCulture',
+    };
+    return fieldMap[metric] || 'recommendationScore';
+  }
+
+  private getScoreByMetric(scores: any, metric: string): number | null {
+    const scoreMap: Record<string, string> = {
+      overall: 'overall',
+      culture: 'culture',
+      workLife: 'workLifeBalance',
+      career: 'careerGrowth',
+      tech: 'techCulture',
+    };
+    const scoreKey = scoreMap[metric] || 'overall';
+    return scores[scoreKey];
+  }
+
+  private getRecommendationLevel(recommendationScore: number | null): string {
+    if (!recommendationScore) return 'No rating';
+    if (recommendationScore >= 8.5) return 'Highly Recommended';
+    if (recommendationScore >= 7.5) return 'Recommended';
+    if (recommendationScore >= 6.5) return 'Good Option';
+    if (recommendationScore >= 5.5) return 'Consider Carefully';
+    return 'Proceed with Caution';
   }
 }
