@@ -43,7 +43,7 @@ export class ScraperService {
     private readonly devBgScraper: DevBgScraper,
     private readonly vacancyService: VacancyService,
     private readonly companyService: CompanyService,
-    private readonly companySourceService: CompanySourceService,
+    // private readonly companySourceService: CompanySourceService,
     private readonly companyProfileScraper: CompanyProfileScraper,
     private readonly prisma: PrismaService,
     @InjectQueue('scraper') private readonly scraperQueue: Queue,
@@ -364,16 +364,17 @@ export class ScraperService {
     analysisType: 'profile' | 'website'
   ): Promise<void> {
     try {
+      // TEMPORARILY DISABLED FOR TESTING
       // Check if we should scrape this company source
-      const cacheCheck = await this.companySourceService.shouldScrapeCompanySource(
-        companyId,
-        sourceSite,
-        sourceUrl
-      );
+      // const cacheCheck = await this.companySourceService.shouldScrapeCompanySource(
+      //   companyId,
+      //   sourceSite,
+      //   sourceUrl
+      // );
 
-      this.logger.log(`Company source check for ${sourceSite}: ${cacheCheck.reason}`);
+      // this.logger.log(`Company source check for ${sourceSite}: ${cacheCheck.reason}`);
 
-      if (cacheCheck.shouldScrape) {
+      // if (cacheCheck.shouldScrape) {
         // Validate the company URL first
         const validation = await this.companyProfileScraper.validateCompanyUrl(sourceUrl);
         
@@ -383,9 +384,9 @@ export class ScraperService {
         } else {
           this.logger.warn(`Invalid company URL for ${sourceSite}: ${sourceUrl} - ${validation.error}`);
           // Mark source as invalid in the database
-          await this.companySourceService.markSourceAsInvalid(companyId, sourceSite, validation.error);
+          // await this.companySourceService.markSourceAsInvalid(companyId, sourceSite, validation.error);
         }
-      }
+      // }
 
     } catch (error) {
       this.logger.error(`Failed to process company source ${sourceSite} for company ${companyId}:`, error);
