@@ -15,6 +15,8 @@ describe('ScraperService Integration Tests', () => {
   let devBgScraper: DevBgScraper;
   let vacancyService: VacancyService;
   let companyService: CompanyService;
+  let companySourceService: any;
+  let companyProfileScraper: any;
   let prismaService: PrismaService;
   let mockScraperQueue: any;
   let mockCompanyAnalysisQueue: any;
@@ -159,6 +161,8 @@ describe('ScraperService Integration Tests', () => {
     devBgScraper = module.get<DevBgScraper>(DevBgScraper);
     vacancyService = module.get<VacancyService>(VacancyService);
     companyService = module.get<CompanyService>(CompanyService);
+    companySourceService = module.get<CompanySourceService>(CompanySourceService);
+    companyProfileScraper = module.get<CompanyProfileScraper>(CompanyProfileScraper);
     prismaService = module.get<PrismaService>(PrismaService);
   });
 
@@ -167,6 +171,16 @@ describe('ScraperService Integration Tests', () => {
     // Reset queue mocks
     mockScraperQueue.add.mockClear();
     mockCompanyAnalysisQueue.add.mockClear();
+
+    // Setup default mocks for company analysis tests
+    (companySourceService.shouldScrapeCompanySource as jest.Mock).mockResolvedValue({
+      shouldScrape: true,
+      reason: 'No existing source found'
+    });
+
+    (companyProfileScraper.validateCompanyUrl as jest.Mock).mockResolvedValue({
+      isValid: true
+    });
   });
 
   describe('scrapeDevBg', () => {
@@ -363,10 +377,6 @@ describe('ScraperService Integration Tests', () => {
   });
 
   describe('Company Analysis Integration', () => {
-    beforeEach(() => {
-      // Reset company analysis queue mock for each test
-      mockCompanyAnalysisQueue.add.mockResolvedValue({ id: 'job-123', data: {} });
-    });
 
     it('should process company URLs and queue company analysis jobs when enabled', async () => {
       // Arrange
@@ -399,15 +409,32 @@ describe('ScraperService Integration Tests', () => {
       expect(result.totalJobsFound).toBe(1);
       expect(result.newVacancies).toBe(1);
 
-      // Verify company analysis queue was used
-      expect(mockCompanyAnalysisQueue.add).toHaveBeenCalledWith(
-        'analyze-company',
+      // Verify company analysis queue was used (via scraper queue with 'company-analysis' job type)
+      // Should be called twice - once for profile URL, once for website URL
+      expect(mockScraperQueue.add).toHaveBeenCalledWith(
+        'company-analysis',
         expect.objectContaining({
           companyId: mockCompany.id,
-          companyName: mockCompany.name,
-          profileUrl: 'https://dev.bg/company/test-company/',
-          websiteUrl: 'https://test-company.com',
-        })
+          sourceSite: 'dev.bg',
+          sourceUrl: 'https://dev.bg/company/test-company/',
+          analysisType: 'profile',
+          priority: 3,
+          maxRetries: 2,
+        }),
+        expect.any(Object)
+      );
+
+      expect(mockScraperQueue.add).toHaveBeenCalledWith(
+        'company-analysis',
+        expect.objectContaining({
+          companyId: mockCompany.id,
+          sourceSite: 'company_website',
+          sourceUrl: 'https://test-company.com',
+          analysisType: 'website',
+          priority: 3,
+          maxRetries: 2,
+        }),
+        expect.any(Object)
       );
     });
 
@@ -441,8 +468,12 @@ describe('ScraperService Integration Tests', () => {
       expect(result.totalJobsFound).toBe(1);
       expect(result.newVacancies).toBe(1);
 
-      // Verify company analysis queue was NOT used
-      expect(mockCompanyAnalysisQueue.add).not.toHaveBeenCalled();
+      // Verify company analysis queue was NOT used (check scraper queue for 'company-analysis' jobs)
+      expect(mockScraperQueue.add).not.toHaveBeenCalledWith(
+        'company-analysis',
+        expect.any(Object),
+        expect.any(Object)
+      );
     });
 
     it('should handle company analysis job queuing errors gracefully', async () => {
@@ -465,8 +496,13 @@ describe('ScraperService Integration Tests', () => {
       (prismaService.vacancy.findFirst as jest.Mock).mockResolvedValue(null);
       (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
 
-      // Mock queue error
-      mockCompanyAnalysisQueue.add.mockRejectedValue(new Error('Queue failed'));
+      // Mock queue error for company-analysis jobs
+      mockScraperQueue.add.mockImplementation((jobType, data, options) => {
+        if (jobType === 'company-analysis') {
+          return Promise.reject(new Error('Queue failed'));
+        }
+        return Promise.resolve({ id: 'job-123', data: {} });
+      });
 
       // Act
       const result = await service.scrapeDevBg({ enableCompanyAnalysis: true });
@@ -503,7 +539,11 @@ describe('ScraperService Integration Tests', () => {
       expect(result.newVacancies).toBe(1);
 
       // Verify company analysis was not queued (no URLs found)
-      expect(mockCompanyAnalysisQueue.add).not.toHaveBeenCalled();
+      expect(mockScraperQueue.add).not.toHaveBeenCalledWith(
+        'company-analysis',
+        expect.any(Object),
+        expect.any(Object)
+      );
     });
 
     it('should handle partial company URL data correctly', async () => {
@@ -533,15 +573,18 @@ describe('ScraperService Integration Tests', () => {
       // Assert
       expect(result).toBeDefined();
 
-      // Verify company analysis was queued with available data
-      expect(mockCompanyAnalysisQueue.add).toHaveBeenCalledWith(
-        'analyze-company',
+      // Verify company analysis was queued with available data (via scraper queue with 'company-analysis' job type)
+      expect(mockScraperQueue.add).toHaveBeenCalledWith(
+        'company-analysis',
         expect.objectContaining({
           companyId: mockCompany.id,
-          companyName: mockCompany.name,
-          profileUrl: 'https://dev.bg/company/test-company/',
-          websiteUrl: undefined, // No website URL provided
-        })
+          sourceSite: 'dev.bg',
+          sourceUrl: 'https://dev.bg/company/test-company/',
+          analysisType: 'profile',
+          priority: 3,
+          maxRetries: 2,
+        }),
+        expect.any(Object)
       );
     });
   });

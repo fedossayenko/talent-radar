@@ -12,6 +12,8 @@ import { TechPatternService } from './services/tech-pattern.service';
 import { ContentExtractorService } from './services/content-extractor.service';
 import { HtmlCleanerService } from './services/html-cleaner.service';
 import { AiProcessingPipelineService } from './services/ai-processing-pipeline.service';
+import { CompanyProfileScraper } from './services/company-profile.scraper';
+import { CompanySourceService } from '../company/company-source.service';
 import { VacancyModule } from '../vacancy/vacancy.module';
 import { CompanyModule } from '../company/company.module';
 import { AiModule } from '../ai/ai.module';
@@ -50,6 +52,8 @@ import scraperConfig from '../../config/scraper.config';
     ContentExtractorService,
     HtmlCleanerService,
     AiProcessingPipelineService,
+    CompanyProfileScraper,
+    CompanySourceService,
   ],
   exports: [ScraperService, ScraperScheduler, ContentExtractorService, HtmlCleanerService, AiProcessingPipelineService],
 })
