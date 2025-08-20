@@ -27,10 +27,11 @@ services:
       PORT: 3001
       DATABASE_URL: file:./data/dev.db
       REDIS_URL: redis://redis:6379
-      REDIS_OPTIONAL: "true"
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       LOG_LEVEL: debug
+      PLAYWRIGHT_HEADLESS: true
+      SCRAPER_CONCURRENCY: 3
       # AI Configuration
       AI_SERVICE_ENABLED: "true"
       AI_MODEL_DEFAULT: gpt-5-nano
@@ -63,11 +64,13 @@ services:
       SCRAPER_MAX_VACANCIES: 20
     ports:
       - "3001:3001"
+      - "5555:5555"
     volumes:
       - ./apps/api/src:/app/apps/api/src:ro
       - ./packages:/app/packages:ro
       - api_data:/app/data
-    depends_on: []
+    depends_on:
+      - redis
     networks:
       - talent-radar-network
     restart: unless-stopped
@@ -111,63 +114,6 @@ services:
       timeout: 10s
       retries: 3
 
-  scraper:
-    build:
-      context: .
-      dockerfile: ./docker/api/Dockerfile
-      target: development
-    container_name: talent-radar-scraper
-    environment:
-      NODE_ENV: development
-      DATABASE_URL: file:./data/dev.db
-      REDIS_URL: redis://redis:6379
-      REDIS_OPTIONAL: "true"
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
-      SCRAPER_MODE: true
-      PLAYWRIGHT_HEADLESS: true
-      SCRAPER_CONCURRENCY: 3
-      LOG_LEVEL: debug
-      # AI Configuration
-      AI_SERVICE_ENABLED: "true"
-      AI_MODEL_DEFAULT: gpt-5-nano
-      AI_TIMEOUT: 60000
-      AI_MAX_RETRIES: 3
-      AI_ENABLE_CACHING: "true"
-      AI_CACHE_EXPIRY_HOURS: 24
-      AI_MAX_CONTENT_LENGTH: 10000
-      # Scraper Configuration
-      SCRAPER_ENABLED: "true"
-      DEVBG_BASE_URL: https://dev.bg
-      DEVBG_API_URL: https://dev.bg/company/jobs/java/
-      DEVBG_REQUEST_TIMEOUT: 30000
-      DEVBG_REQUEST_DELAY: 2000
-      DEVBG_MAX_PAGES: 10
-      DEVBG_USER_AGENT: "TalentRadar/1.0 (Job Aggregator)"
-      # Scraper Queue Settings
-      SCRAPER_QUEUE_ATTEMPTS: 3
-      SCRAPER_QUEUE_BACKOFF_DELAY: 5000
-      SCRAPER_QUEUE_KEEP_COMPLETED: 100
-      SCRAPER_QUEUE_KEEP_FAILED: 50
-      # Scraper Filters
-      SCRAPER_TECH_FILTER: java,spring,hibernate,maven,gradle,mysql,postgresql,docker,kubernetes,aws
-      SCRAPER_LOCATION_FILTER: bulgaria,sofia,plovdiv,varna,burgas,remote
-      SCRAPER_JOB_TYPE_FILTER: backend,full-stack,java-developer
-      # Monitoring & Metrics
-      METRICS_ENABLED: "true"
-      HEALTH_CHECK_ENABLED: "true"
-      # Scraper Limits
-      SCRAPER_MAX_VACANCIES: 20
-    volumes:
-      - ./apps/api/src:/app/apps/api/src:ro
-      - ./packages:/app/packages:ro
-      - api_data:/app/data
-    depends_on: []
-    networks:
-      - talent-radar-network
-    restart: unless-stopped
-    working_dir: /app/apps/api
-    command: ["npm", "run", "start:scraper"]
 
 
   redis-commander:

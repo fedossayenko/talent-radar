@@ -8,13 +8,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private client: Redis;
   private publisher: Redis;
   private subscriber: Redis;
-  private isConnected = false;
 
   constructor(private configService: ConfigService) {
     const redisConfig = {
       host: this.configService.get<string>('redis.host'),
       port: this.configService.get<number>('redis.port'),
       password: this.configService.get<string>('redis.password'),
+      username: this.configService.get<string>('redis.username'),
       retryDelayOnFailover: this.configService.get<number>('redis.retryDelayOnFailover'),
       maxRetriesPerRequest: this.configService.get<number>('redis.maxRetriesPerRequest'),
       lazyConnect: this.configService.get<boolean>('redis.lazyConnect'),
@@ -30,11 +30,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
-    // Make Redis connection optional in test and development environments to prevent startup failures
-    const isTestEnv = process.env.NODE_ENV === 'test';
-    const isDevEnv = process.env.NODE_ENV === 'development';
-    const isRedisOptional = process.env.REDIS_OPTIONAL === 'true' || isTestEnv || isDevEnv;
-    
     try {
       await Promise.all([
         this.client.ping(),
@@ -42,16 +37,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
         this.subscriber.ping(),
       ]);
       this.logger.log('✅ Redis connected successfully');
-      this.isConnected = true;
     } catch (error) {
       this.logger.error('❌ Failed to connect to Redis:', error);
-      this.isConnected = false;
-      
-      if (!isRedisOptional) {
-        throw error;
-      } else {
-        this.logger.warn('🔶 Redis connection failed but is optional - continuing startup without Redis features');
-      }
+      throw error;
     }
   }
 
@@ -93,10 +81,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Set a key-value pair with optional expiration
    */
   async set(key: string, value: any, ttl?: number): Promise<void> {
-    if (!this.isConnected) {
-      this.logger.debug('Redis not connected - skipping set operation');
-      return;
-    }
     
     const serializedValue = typeof value === 'string' ? value : JSON.stringify(value);
     
@@ -111,10 +95,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Get a value by key
    */
   async get<T = any>(key: string): Promise<T | null> {
-    if (!this.isConnected) {
-      this.logger.debug('Redis not connected - returning null for get operation');
-      return null;
-    }
     
     const value = await this.client.get(key);
     if (!value) return null;
@@ -268,16 +248,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Health check for Redis connection
    */
   async healthCheck(): Promise<boolean> {
-    if (!this.isConnected) {
-      return false;
-    }
-    
     try {
       const pong = await this.client.ping();
       return pong === 'PONG';
     } catch (error) {
       this.logger.error('Redis health check failed:', error);
-      this.isConnected = false;
       return false;
     }
   }

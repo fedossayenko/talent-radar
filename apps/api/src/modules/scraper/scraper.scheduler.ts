@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectQueue } from '@nestjs/bull';
 import * as Bull from 'bull';
@@ -13,7 +13,7 @@ export class ScraperScheduler {
 
   constructor(
     private readonly configService: ConfigService,
-    @Optional() @InjectQueue('scraper') private readonly scraperQueue?: Bull.Queue<AllJobData>,
+    @InjectQueue('scraper') private readonly scraperQueue: Bull.Queue<AllJobData>,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
@@ -25,10 +25,6 @@ export class ScraperScheduler {
       return;
     }
 
-    if (!this.scraperQueue) {
-      this.logger.warn('Queue not available - skipping scheduled dev.bg scraping');
-      return;
-    }
 
     this.logger.log('Scheduling daily dev.bg scraping job');
 
