@@ -1,4 +1,24 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: talent-radar-postgres-prod
+    environment:
+      POSTGRES_DB: talent_radar
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - talent-radar-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d talent_radar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: talent-radar-redis-prod
@@ -25,7 +45,7 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: file:./data/prod.db
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/talent_radar
       REDIS_URL: redis://redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
@@ -59,12 +79,12 @@ services:
       METRICS_ENABLED: "true"
       HEALTH_CHECK_ENABLED: "true"
       # Scraper Limits
-      SCRAPER_MAX_VACANCIES: 20
+      SCRAPER_MAX_VACANCIES: 10
     ports:
       - "3001:3001"
-    volumes:
-      - api_data:/app/data
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -108,7 +128,7 @@ services:
     container_name: talent-radar-scraper-prod
     environment:
       NODE_ENV: production
-      DATABASE_URL: file:./data/prod.db
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/talent_radar
       REDIS_URL: redis://redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
@@ -145,7 +165,7 @@ services:
       METRICS_ENABLED: "true"
       HEALTH_CHECK_ENABLED: "true"
       # Scraper Limits
-      SCRAPER_MAX_VACANCIES: 20
+      SCRAPER_MAX_VACANCIES: 10
     volumes:
       - scraper_data:/app/data
     depends_on:
