@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -28,6 +28,11 @@ model CompanySource {
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, sourceSite])
+  @@index([sourceSite])
+  @@index([lastScrapedAt])
+  @@index([isValid])
+  // Full-text search index for scraped content
+  @@index([scrapedContent], map: "company_sources_scraped_content_idx")
   @@map("company_sources")
 }
 
@@ -55,6 +60,13 @@ model Company {
   vacancies    Vacancy[]
   sources      CompanySource[]
 
+  @@index([name])
+  @@index([industry])
+  @@index([size])
+  @@index([location])
+  @@index([lastAnalyzedAt])
+  // Full-text search indexes for PostgreSQL
+  @@index([name, description], map: "companies_fulltext_name_desc_idx")
   @@map("companies")
 }
 
@@ -73,15 +85,15 @@ model CompanyAnalysis {
   benefitsScore          Float?   // 0-10 rating for benefits package
   techCulture            Float?   // 0-10 rating for technical culture
   
-  // Detailed analysis fields
-  pros                   String?  // JSON array of positive aspects
-  cons                   String?  // JSON array of negative aspects  
-  hiringProcess          String?  // JSON string of process steps
-  techStack              String?  // JSON string of technologies
-  benefits               String?  // JSON array of benefits offered
-  interviewProcess       String?  // JSON string of interview process details
-  growthOpportunities    String?  // JSON array of career growth opportunities
-  companyValues          String?  // JSON array of company values/mission
+  // Detailed analysis fields (using JSONB for better performance)
+  pros                   Json?    @db.JsonB // JSON array of positive aspects
+  cons                   Json?    @db.JsonB // JSON array of negative aspects  
+  hiringProcess          Json?    @db.JsonB // JSON string of process steps
+  techStack              Json?    @db.JsonB // JSON string of technologies
+  benefits               Json?    @db.JsonB // JSON array of benefits offered
+  interviewProcess       Json?    @db.JsonB // JSON string of interview process details
+  growthOpportunities    Json?    @db.JsonB // JSON array of career growth opportunities
+  companyValues          Json?    @db.JsonB // JSON array of company values/mission
   workEnvironment        String?  // Description of work environment
   
   // Meta information
@@ -89,7 +101,7 @@ model CompanyAnalysis {
   confidenceScore        Float?   // 0-100 confidence in analysis accuracy
   dataCompleteness       Float?   // 0-100 how complete the source data was
   recommendationScore    Float?   // 0-10 overall recommendation score
-  rawData                String?  // JSON string of raw analysis data
+  rawData                Json?    @db.JsonB // JSON string of raw analysis data
   sourceDataSummary      String?  // Summary of what sources were used
   
   createdAt              DateTime @default(now())
@@ -98,6 +110,12 @@ model CompanyAnalysis {
   // Relations
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@index([companyId])
+  @@index([sourceSite])
+  @@index([analysisSource])
+  @@index([recommendationScore])
+  @@index([cultureScore])
+  @@index([confidenceScore])
   @@map("company_analyses")
 }
 
@@ -106,7 +124,7 @@ model Vacancy {
   id              String   @id @default(cuid())
   title           String
   description     String?
-  requirements    String?  // JSON string of requirements array
+  requirements    Json?    @db.JsonB // JSON array of requirements
   location        String?
   salaryMin       Int?     // Use Int for currency (in cents)
   salaryMax       Int?
@@ -125,15 +143,15 @@ model Vacancy {
   // AI-specific fields
   contentHash            String?  // SHA-256 hash for caching extracted content
   extractionConfidence   Float?   // AI confidence score (0-100)
-  extractionMetadata     String?  // JSON metadata: source, model used, processing time, etc.
+  extractionMetadata     Json?    @db.JsonB // JSON metadata: source, model used, processing time, etc.
   qualityScore          Float?   // Overall quality assessment (0-100)
   rawContent            String?  // Original scraped content for reprocessing
-  aiExtractedData       String?  // JSON of all AI-extracted structured data
+  aiExtractedData       Json?    @db.JsonB // JSON of all AI-extracted structured data
   
   // Enhanced structured fields from AI extraction
-  responsibilities      String?  // JSON array of job responsibilities
-  technologies         String?  // JSON array of technologies and tools
-  benefits             String?  // JSON array of benefits and perks
+  responsibilities      Json?    @db.JsonB // JSON array of job responsibilities
+  technologies         Json?    @db.JsonB // JSON array of technologies and tools
+  benefits             Json?    @db.JsonB // JSON array of benefits and perks
   educationLevel       String?  // high_school, bachelor, master, phd, not_specified
   industry             String?  // Industry/sector
   teamSize             String?  // Team size if mentioned
@@ -145,11 +163,25 @@ model Vacancy {
   scores       VacancyScore[]
   applications Application[]
 
-  @@map("vacancies")
   @@index([contentHash])
   @@index([extractionConfidence])
   @@index([qualityScore])
   @@index([sourceSite])
+  @@index([companyId])
+  @@index([experienceLevel])
+  @@index([employmentType])
+  @@index([workModel])
+  @@index([status])
+  @@index([postedAt])
+  @@index([salaryMin, salaryMax])
+  @@index([title])
+  @@index([location])
+  // Full-text search indexes for PostgreSQL
+  @@index([title, description], map: "vacancies_fulltext_title_desc_idx")
+  @@index([requirements], map: "vacancies_requirements_gin_idx", type: Gin)
+  @@index([responsibilities], map: "vacancies_responsibilities_gin_idx", type: Gin)
+  @@index([technologies], map: "vacancies_technologies_gin_idx", type: Gin)
+  @@map("vacancies")
 }
 
 // Vacancy Score model
@@ -164,12 +196,15 @@ model VacancyScore {
   techStackScore        Float?
   workLifeBalanceScore  Float?
   careerGrowthScore     Float?
-  scoringCriteria       String?  // JSON string of criteria and weights
+  scoringCriteria       Json?    @db.JsonB // JSON object of criteria and weights
   scoredAt              DateTime @default(now())
 
   // Relations
   vacancy Vacancy @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
 
+  @@index([vacancyId])
+  @@index([overallScore])
+  @@index([scoredAt])
   @@map("vacancy_scores")
 }
 
@@ -182,15 +217,18 @@ model CV {
   size          Int
   path          String
   extractedText String?
-  skills        String?  // JSON string of skills array
+  skills        Json?    @db.JsonB // JSON array of skills
   experience    Int?     // Years of experience
-  education     String?  // JSON string of education array
+  education     Json?    @db.JsonB // JSON array of education
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   // Relations
   applications Application[]
 
+  @@index([filename])
+  @@index([mimeType])
+  @@index([experience])
   @@map("cvs")
 }
 
@@ -210,5 +248,9 @@ model Application {
   vacancy Vacancy @relation(fields: [vacancyId], references: [id])
   cv      CV?     @relation(fields: [cvId], references: [id])
 
+  @@index([vacancyId])
+  @@index([cvId])
+  @@index([status])
+  @@index([appliedAt])
   @@map("applications")
 }
