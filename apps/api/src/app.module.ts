@@ -70,10 +70,10 @@ import { MetricsModule } from './common/metrics/metrics.module';
           password: configService.get<string>('redis.password'),
           username: configService.get<string>('redis.username'),
           db: configService.get<number>('redis.db'),
-          // Connection options
+          // Connection options  
           retryDelayOnFailover: configService.get<number>('redis.retryDelayOnFailover'),
           maxRetriesPerRequest: configService.get<number>('redis.maxRetriesPerRequest'),
-          lazyConnect: configService.get<boolean>('redis.lazyConnect'),
+          lazyConnect: false, // Bull workers need immediate connections
           family: configService.get<number>('redis.family'),
         },
       }),

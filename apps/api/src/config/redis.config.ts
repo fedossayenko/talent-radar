@@ -18,7 +18,7 @@ export const redisConfig = registerAs('redis', () => {
     // Connection settings
     retryDelayOnFailover: 100,
     maxRetriesPerRequest: 3,
-    lazyConnect: true,
+    lazyConnect: false, // Bull workers need immediate connections
     keepAlive: 30000,
     
     // Pool settings
