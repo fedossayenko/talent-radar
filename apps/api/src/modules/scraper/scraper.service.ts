@@ -4,6 +4,7 @@ import { Queue } from 'bull';
 import { DevBgScraper, DevBgJobListing } from './scrapers/dev-bg.scraper';
 import { VacancyService } from '../vacancy/vacancy.service';
 import { CompanyService } from '../company/company.service';
+import { CompanySourceService } from '../company/company-source.service';
 import { CompanyProfileScraper } from './services/company-profile.scraper';
 import { PrismaService } from '../../common/database/prisma.service';
 import { AiExtractionJobData } from './processors/scraper.processor';
@@ -34,6 +35,13 @@ export interface CompanyAnalysisJobData {
   maxRetries?: number;
 }
 
+export interface ScrapingStats {
+  totalVacancies: number;
+  activeVacancies: number;
+  companiesFromDevBg: number;
+  lastScrapedAt: string | null;
+}
+
 @Injectable()
 export class ScraperService {
   private readonly logger = new Logger(ScraperService.name);
@@ -42,7 +50,7 @@ export class ScraperService {
     private readonly devBgScraper: DevBgScraper,
     private readonly vacancyService: VacancyService,
     private readonly companyService: CompanyService,
-    // private readonly companySourceService: CompanySourceService,
+    private readonly companySourceService: CompanySourceService,
     private readonly companyProfileScraper: CompanyProfileScraper,
     private readonly prisma: PrismaService,
     @InjectQueue('scraper') private readonly scraperQueue: Queue,
@@ -272,7 +280,7 @@ export class ScraperService {
     return workModelMap[workModel.toLowerCase()] || 'full-time';
   }
 
-  async getScrapingStats(): Promise<any> {
+  async getScrapingStats(): Promise<ScrapingStats> {
     // Get statistics about scraped data
     return {
       totalVacancies: await this.prisma.vacancy.count({
@@ -292,14 +300,14 @@ export class ScraperService {
     };
   }
 
-  private async getLastScrapedDate(): Promise<Date | null> {
+  private async getLastScrapedDate(): Promise<string | null> {
     const lastVacancy = await this.prisma.vacancy.findFirst({
       where: { sourceSite: 'dev.bg' },
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
 
-    return lastVacancy?.createdAt || null;
+    return lastVacancy?.createdAt?.toISOString() || null;
   }
 
   private async queueAiExtraction(vacancyId: string, content: string, sourceUrl: string): Promise<void> {
@@ -364,17 +372,16 @@ export class ScraperService {
     analysisType: 'profile' | 'website'
   ): Promise<void> {
     try {
-      // TEMPORARILY DISABLED FOR TESTING
       // Check if we should scrape this company source
-      // const cacheCheck = await this.companySourceService.shouldScrapeCompanySource(
-      //   companyId,
-      //   sourceSite,
-      //   sourceUrl
-      // );
+      const cacheCheck = await this.companySourceService.shouldScrapeCompanySource(
+        companyId,
+        sourceSite,
+        sourceUrl
+      );
 
-      // this.logger.log(`Company source check for ${sourceSite}: ${cacheCheck.reason}`);
+      this.logger.log(`Company source check for ${sourceSite}: ${cacheCheck.reason}`);
 
-      // if (cacheCheck.shouldScrape) {
+      if (cacheCheck.shouldScrape) {
         // Validate the company URL first
         const validation = await this.companyProfileScraper.validateCompanyUrl(sourceUrl);
         
@@ -384,9 +391,9 @@ export class ScraperService {
         } else {
           this.logger.warn(`Invalid company URL for ${sourceSite}: ${sourceUrl} - ${validation.error}`);
           // Mark source as invalid in the database
-          // await this.companySourceService.markSourceAsInvalid(companyId, sourceSite, validation.error);
+          await this.companySourceService.markSourceAsInvalid(companyId, sourceSite, validation.error);
         }
-      // }
+      }
 
     } catch (error) {
       this.logger.error(`Failed to process company source ${sourceSite} for company ${companyId}:`, error);
