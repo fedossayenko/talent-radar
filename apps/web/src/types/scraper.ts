@@ -2,7 +2,7 @@ export interface ScrapingStats {
   totalVacancies: number
   activeVacancies: number
   companiesFromDevBg: number
-  lastScrapedAt: Date | null
+  lastScrapedAt: string | null
 }
 
 export interface ScrapingResponse {
