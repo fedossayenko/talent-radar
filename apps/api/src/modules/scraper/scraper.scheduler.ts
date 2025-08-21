@@ -12,8 +12,8 @@ export class ScraperScheduler {
   private readonly logger = new Logger(ScraperScheduler.name);
 
   constructor(
-    @InjectQueue('scraper') private readonly scraperQueue: Bull.Queue<AllJobData>,
     private readonly configService: ConfigService,
+    @InjectQueue('scraper') private readonly scraperQueue: Bull.Queue<AllJobData>,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
@@ -24,6 +24,7 @@ export class ScraperScheduler {
       this.logger.log('Scraping is disabled, skipping scheduled dev.bg scraping');
       return;
     }
+
 
     this.logger.log('Scheduling daily dev.bg scraping job');
 

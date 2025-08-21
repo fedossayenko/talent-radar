@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import * as Bull from 'bull';
 import { ScraperProcessor } from './scraper.processor';
 import { ScraperService, CompanyAnalysisJobData } from '../scraper.service';
@@ -82,6 +83,18 @@ describe('ScraperProcessor - Company Analysis', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ScraperProcessor,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn().mockImplementation((key: string, defaultValue?: any) => {
+              const config = {
+                'SCRAPER_ENABLED': true,
+                'scraper': { enabled: true },
+              };
+              return config[key] ?? defaultValue;
+            }),
+          },
+        },
         {
           provide: ScraperService,
           useValue: {

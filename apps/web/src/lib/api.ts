@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { VacancyListResponse, VacancyFilters, Vacancy } from '@/types/vacancy'
+import { ScrapingResponse, ScrapingStatsResponse } from '@/types/scraper'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -55,6 +56,21 @@ export const vacancyApi = {
   // Update vacancy
   updateVacancy: async (id: string, data: Partial<Vacancy>): Promise<{ success: boolean; data: Vacancy }> => {
     const response = await apiClient.put(`/vacancies/${id}`, data)
+    return response.data
+  },
+}
+
+// Scraper API functions
+export const scraperApi = {
+  // Trigger manual scraping
+  triggerManualScraping: async (): Promise<ScrapingResponse> => {
+    const response = await apiClient.post('/scraper/dev-bg/manual')
+    return response.data
+  },
+
+  // Get scraping statistics
+  getScrapingStats: async (): Promise<ScrapingStatsResponse> => {
+    const response = await apiClient.get('/scraper/stats')
     return response.data
   },
 }

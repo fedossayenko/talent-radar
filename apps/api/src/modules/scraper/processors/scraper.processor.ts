@@ -1,5 +1,6 @@
 import { Process, Processor } from '@nestjs/bull';
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import * as Bull from 'bull';
 import { ScraperService, ScrapingResult, CompanyAnalysisJobData } from '../scraper.service';
 import { AiService, VacancyExtractionResult } from '../../ai/ai.service';
@@ -45,10 +46,11 @@ export interface HealthCheckJobData {
 export type AllJobData = ScrapingJobData | AiExtractionJobData | BatchProcessingJobData | HealthCheckJobData | CompanyAnalysisJobData;
 
 @Processor('scraper')
-export class ScraperProcessor {
+export class ScraperProcessor implements OnModuleInit {
   private readonly logger = new Logger(ScraperProcessor.name);
 
   constructor(
+    private readonly configService: ConfigService,
     private readonly scraperService: ScraperService,
     private readonly aiService: AiService,
     private readonly aiPipelineService: AiProcessingPipelineService,
@@ -56,13 +58,37 @@ export class ScraperProcessor {
     private readonly companyService: CompanyService,
     private readonly companySourceService: CompanySourceService,
     private readonly companyProfileScraper: CompanyProfileScraper,
-  ) {}
+  ) {
+    this.logger.log('ScraperProcessor initialized');
+  }
+
+  async onModuleInit(): Promise<void> {
+    this.logger.log('🚀 ScraperProcessor initializing...');
+    
+    // Check if scraper is enabled via configuration
+    const isScrapingEnabled = this.configService?.get<boolean>('SCRAPER_ENABLED', true);
+    const scraperConfig = this.configService?.get('scraper');
+    
+    this.logger.log(`Configuration: SCRAPER_ENABLED=${isScrapingEnabled}, scraper.enabled=${scraperConfig?.enabled}`);
+    
+    // Log all processor methods that should be registered
+    const processorMethods = [
+      'scrape-dev-bg',
+      'health-check', 
+      'ai-extraction',
+      'batch-processing',
+      'company-analysis'
+    ];
+    
+    this.logger.log(`✅ ScraperProcessor ready - registered processors: ${processorMethods.join(', ')}`);
+  }
+
 
   @Process('scrape-dev-bg')
   async handleDevBgScraping(job: Bull.Job<ScrapingJobData>): Promise<ScrapingResult> {
     const { data } = job;
     
-    this.logger.log(`Starting dev.bg scraping job ${job.id}`, {
+    this.logger.log(`🔥 PROCESSOR CALLED - Starting dev.bg scraping job ${job.id}`, {
       triggeredBy: data.triggeredBy,
       options: data.options,
     });
@@ -109,11 +135,11 @@ export class ScraperProcessor {
     };
   }
 
-  @Process({ name: 'ai-extraction', concurrency: 3 })
+  @Process('ai-extraction')
   async handleAiExtraction(job: Bull.Job<AiExtractionJobData>): Promise<PipelineResult> {
     const { data } = job;
     
-    this.logger.log(`Starting AI extraction job ${job.id}`, {
+    this.logger.log(`🤖 Starting AI extraction job ${job.id}`, {
       contentHash: data.contentHash,
       sourceUrl: data.sourceUrl,
       priority: data.priority,
@@ -204,7 +230,7 @@ export class ScraperProcessor {
     }
   }
 
-  @Process({ name: 'batch-processing', concurrency: 1 })
+  @Process('batch-processing')
   async handleBatchProcessing(job: Bull.Job<BatchProcessingJobData>): Promise<any> {
     const { data } = job;
     
@@ -277,7 +303,7 @@ export class ScraperProcessor {
     }
   }
 
-  @Process({ name: 'company-analysis', concurrency: 2 })
+  @Process('company-analysis')
   async handleCompanyAnalysis(job: Bull.Job<CompanyAnalysisJobData>): Promise<any> {
     const { data } = job;
     

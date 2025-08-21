@@ -1,4 +1,5 @@
 import { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 
 interface LayoutProps {
   children: ReactNode
@@ -20,12 +21,18 @@ export default function Layout({ children }: LayoutProps) {
               </span>
             </div>
             <nav className="flex space-x-8">
-              <a
-                href="/vacancies"
+              <Link
+                to="/vacancies"
                 className="text-gray-900 hover:text-gray-700 px-3 py-2 text-sm font-medium"
               >
                 Vacancies
-              </a>
+              </Link>
+              <Link
+                to="/admin"
+                className="text-gray-900 hover:text-gray-700 px-3 py-2 text-sm font-medium"
+              >
+                Admin
+              </Link>
             </nav>
           </div>
         </div>

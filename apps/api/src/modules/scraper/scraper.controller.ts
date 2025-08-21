@@ -32,7 +32,7 @@ export class ScraperController {
 
   @Post('dev-bg/test')
   async triggerTestScraping(@Query('limit') limit?: string) {
-    const limitNum = limit ? parseInt(limit, 10) : 5;
+    const limitNum = limit ? parseInt(limit, 10) : 1;
     this.logger.log(`Test scraping triggered via API with limit: ${limitNum}`);
     
     try {

@@ -22,10 +22,10 @@ ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 # Create app directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files for workspace setup
 COPY package*.json ./
 COPY apps/api/package*.json ./apps/api/
-COPY packages/ ./packages/
+COPY packages/*/package*.json ./packages/
 
 # Install dependencies
 FROM base AS dependencies
@@ -33,15 +33,37 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Development stage
 FROM base AS development
+
+# Install all dependencies including dev dependencies
 RUN npm ci
 RUN npm install -g @nestjs/cli
-COPY . .
+
+# Copy workspace source code
+COPY apps/ ./apps/
+COPY packages/ ./packages/
+
+# Copy and setup entrypoint script
+COPY docker/api/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+# Create data directory for SQLite
+RUN mkdir -p /app/data && chmod 755 /app/data
+
+# Generate Prisma client during build
+WORKDIR /app/apps/api
+RUN npx prisma generate
+
+# Back to app root
+WORKDIR /app
+
 EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3001/health || exit 1
 
+# Use entrypoint script
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["npm", "run", "start:dev"]
 
 # Build stage

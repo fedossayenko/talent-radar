@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
@@ -59,13 +59,22 @@ import { MetricsModule } from './common/metrics/metrics.module';
     // Task scheduling
     ScheduleModule.forRoot(),
 
-    // Queue management
+    // Queue management with Redis
     BullModule.forRootAsync({
-      useFactory: () => ({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
         redis: {
-          host: process.env.REDIS_HOST || 'localhost',
-          port: parseInt(process.env.REDIS_PORT || '6379'),
-          password: process.env.REDIS_PASSWORD,
+          host: configService.get<string>('redis.host'),
+          port: configService.get<number>('redis.port'),
+          password: configService.get<string>('redis.password'),
+          username: configService.get<string>('redis.username'),
+          db: configService.get<number>('redis.db'),
+          // Connection options  
+          retryDelayOnFailover: configService.get<number>('redis.retryDelayOnFailover'),
+          maxRetriesPerRequest: configService.get<number>('redis.maxRetriesPerRequest'),
+          lazyConnect: false, // Bull workers need immediate connections
+          family: configService.get<number>('redis.family'),
         },
       }),
     }),

@@ -14,6 +14,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       host: this.configService.get<string>('redis.host'),
       port: this.configService.get<number>('redis.port'),
       password: this.configService.get<string>('redis.password'),
+      username: this.configService.get<string>('redis.username'),
       retryDelayOnFailover: this.configService.get<number>('redis.retryDelayOnFailover'),
       maxRetriesPerRequest: this.configService.get<number>('redis.maxRetriesPerRequest'),
       lazyConnect: this.configService.get<boolean>('redis.lazyConnect'),
@@ -29,9 +30,6 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
-    // In test environment, make Redis connection optional to prevent startup failures
-    const isTestEnv = process.env.NODE_ENV === 'test';
-    
     try {
       await Promise.all([
         this.client.ping(),
@@ -41,12 +39,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('✅ Redis connected successfully');
     } catch (error) {
       this.logger.error('❌ Failed to connect to Redis:', error);
-      
-      if (!isTestEnv) {
-        throw error;
-      } else {
-        this.logger.warn('🔶 Redis connection failed in test environment - continuing startup');
-      }
+      throw error;
     }
   }
 
@@ -88,6 +81,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Set a key-value pair with optional expiration
    */
   async set(key: string, value: any, ttl?: number): Promise<void> {
+    
     const serializedValue = typeof value === 'string' ? value : JSON.stringify(value);
     
     if (ttl) {
@@ -101,6 +95,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * Get a value by key
    */
   async get<T = any>(key: string): Promise<T | null> {
+    
     const value = await this.client.get(key);
     if (!value) return null;
 

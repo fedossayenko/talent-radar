@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule } from '@nestjs/config';
 import { ScraperService } from './scraper.service';
@@ -53,6 +53,6 @@ import scraperConfig from '../../config/scraper.config';
     AiProcessingPipelineService,
     CompanyProfileScraper,
   ],
-  exports: [ScraperService, ScraperScheduler, ContentExtractorService, HtmlCleanerService, AiProcessingPipelineService],
+  exports: [ScraperService, ScraperScheduler, ScraperProcessor, ContentExtractorService, HtmlCleanerService, AiProcessingPipelineService],
 })
 export class ScraperModule {}
