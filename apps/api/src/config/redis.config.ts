@@ -1,12 +1,15 @@
 import { registerAs } from '@nestjs/config';
+import { Logger } from '@nestjs/common';
 import { RedisUrlParser } from '../common/utils/redis-url.parser';
+
+const logger = new Logger('RedisConfig');
 
 export const redisConfig = registerAs('redis', () => {
   const parsedConfig = RedisUrlParser.createRedisConfig();
   
   // Debug logging to understand what's being parsed
-  console.log('🔍 Redis URL:', process.env.REDIS_URL);
-  console.log('🔍 Parsed Redis Config:', JSON.stringify(parsedConfig, null, 2));
+  logger.debug(`Redis URL: ${process.env.REDIS_URL}`);
+  logger.debug(`Parsed Redis Config: ${JSON.stringify(parsedConfig, null, 2)}`);
   
   return {
     url: process.env.REDIS_URL || `redis://${parsedConfig.host}:${parsedConfig.port}`,

@@ -4,7 +4,6 @@ import { Queue } from 'bull';
 import { DevBgScraper, DevBgJobListing } from './scrapers/dev-bg.scraper';
 import { VacancyService } from '../vacancy/vacancy.service';
 import { CompanyService } from '../company/company.service';
-import { CompanySourceService } from '../company/company-source.service';
 import { CompanyProfileScraper } from './services/company-profile.scraper';
 import { PrismaService } from '../../common/database/prisma.service';
 import { AiExtractionJobData } from './processors/scraper.processor';

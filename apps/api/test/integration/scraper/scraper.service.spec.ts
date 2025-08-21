@@ -497,7 +497,7 @@ describe('ScraperService Integration Tests', () => {
       (vacancyService.create as jest.Mock).mockResolvedValue({ data: mockVacancy });
 
       // Mock queue error for company-analysis jobs
-      mockScraperQueue.add.mockImplementation((jobType, data, options) => {
+      mockScraperQueue.add.mockImplementation((jobType, _data, _options) => {
         if (jobType === 'company-analysis') {
           return Promise.reject(new Error('Queue failed'));
         }

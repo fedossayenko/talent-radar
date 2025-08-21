@@ -1,3 +1,5 @@
+import { Logger } from '@nestjs/common';
+
 export interface ParsedRedisConfig {
   host: string;
   port: number;
@@ -15,11 +17,12 @@ export interface ParsedRedisConfig {
  * - redis://redis:6379
  */
 export class RedisUrlParser {
+  private static readonly logger = new Logger(RedisUrlParser.name);
+
   static parseRedisUrl(url: string): ParsedRedisConfig {
     try {
       const parsedUrl = new URL(url);
-      console.log('🔍 DEBUG parseRedisUrl - parsedUrl.hostname:', parsedUrl.hostname);
-      console.log('🔍 DEBUG parseRedisUrl - parsedUrl.port:', parsedUrl.port);
+      this.logger.debug(`parseRedisUrl - hostname: ${parsedUrl.hostname}, port: ${parsedUrl.port}`);
       
       if (!parsedUrl.protocol.startsWith('redis')) {
         throw new Error(`Invalid Redis URL protocol: ${parsedUrl.protocol}`);
@@ -60,13 +63,13 @@ export class RedisUrlParser {
    */
   static createRedisConfig(): ParsedRedisConfig {
     const redisUrl = process.env.REDIS_URL;
-    console.log('🔍 DEBUG createRedisConfig - REDIS_URL:', redisUrl);
-    console.log('🔍 DEBUG createRedisConfig - REDIS_HOST:', process.env.REDIS_HOST);
+    this.logger.debug(`createRedisConfig - REDIS_URL: ${redisUrl}`);
+    this.logger.debug(`createRedisConfig - REDIS_HOST: ${process.env.REDIS_HOST}`);
     
     if (redisUrl) {
       // Parse REDIS_URL and use parsed values as primary source
       const parsedConfig = this.parseRedisUrl(redisUrl);
-      console.log('🔍 DEBUG createRedisConfig - parsedConfig after parsing:', JSON.stringify(parsedConfig, null, 2));
+      this.logger.debug(`createRedisConfig - parsedConfig: ${JSON.stringify(parsedConfig, null, 2)}`);
       
       const finalConfig = {
         host: parsedConfig.host || process.env.REDIS_HOST || 'localhost',
@@ -76,7 +79,7 @@ export class RedisUrlParser {
         db: parsedConfig.db || (process.env.REDIS_DB ? parseInt(process.env.REDIS_DB, 10) : 0),
       };
       
-      console.log('🔍 DEBUG createRedisConfig - finalConfig:', JSON.stringify(finalConfig, null, 2));
+      this.logger.debug(`createRedisConfig - finalConfig: ${JSON.stringify(finalConfig, null, 2)}`);
       return finalConfig;
     }
 
