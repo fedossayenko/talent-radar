@@ -9,6 +9,8 @@ import { VacancyService } from '../../vacancy/vacancy.service';
 import { CompanyService } from '../../company/company.service';
 import { CompanySourceService } from '../../company/company-source.service';
 import { CompanyProfileScraper } from '../services/company-profile.scraper';
+import { CompanyValidationService } from '../services/company-validation.service';
+import { CompanyScoringService } from '../../company/services/company-scoring.service';
 
 describe('ScraperProcessor - Company Analysis', () => {
   let processor: ScraperProcessor;
@@ -79,6 +81,8 @@ describe('ScraperProcessor - Company Analysis', () => {
     dataCompleteness: 90,
   };
 
+  let companyValidationService: jest.Mocked<CompanyValidationService>;
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -126,6 +130,7 @@ describe('ScraperProcessor - Company Analysis', () => {
           provide: CompanyService,
           useValue: {
             findOrCreate: jest.fn(),
+            findOne: jest.fn(),
             update: jest.fn(),
             createOrUpdateAnalysis: jest.fn(),
           },
@@ -144,6 +149,19 @@ describe('ScraperProcessor - Company Analysis', () => {
             scrapeCompanyWebsite: jest.fn(),
           },
         },
+        {
+          provide: CompanyValidationService,
+          useValue: {
+            validateCompanyProfile: jest.fn(),
+            shouldUpdateCompanyName: jest.fn(),
+          },
+        },
+        {
+          provide: CompanyScoringService,
+          useValue: {
+            scoreCompany: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -152,12 +170,15 @@ describe('ScraperProcessor - Company Analysis', () => {
     companyService = module.get(CompanyService);
     companySourceService = module.get(CompanySourceService);
     companyProfileScraper = module.get(CompanyProfileScraper);
+    companyValidationService = module.get(CompanyValidationService);
 
     // Reset all mocks
     jest.clearAllMocks();
 
     // Setup default mock implementations
     mockJob.progress.mockResolvedValue(undefined);
+    companyService.findOne.mockResolvedValue({ success: true, data: null });
+    companyValidationService.shouldUpdateCompanyName.mockReturnValue(true);
   });
 
   describe('handleCompanyAnalysis', () => {
@@ -203,6 +224,7 @@ describe('ScraperProcessor - Company Analysis', () => {
         size: mockAnalysisResult.size,
         founded: mockAnalysisResult.founded,
         employeeCount: mockAnalysisResult.employeeCount,
+        lastAnalyzedAt: expect.any(Date),
       });
       expect(companyService.createOrUpdateAnalysis).toHaveBeenCalled();
 
@@ -399,7 +421,7 @@ describe('ScraperProcessor - Company Analysis', () => {
       // Assert
       expect(companyService.createOrUpdateAnalysis).toHaveBeenCalledWith({
         companyId: mockCompanyAnalysisJobData.companyId,
-        analysisSource: mockCompanyAnalysisJobData.sourceSite,
+        analysisSource: "ai_generated",
         recommendationScore: mockAnalysisResult.recommendationScore,
         pros: JSON.stringify(mockAnalysisResult.pros),
         cons: JSON.stringify(mockAnalysisResult.cons),
@@ -417,7 +439,14 @@ describe('ScraperProcessor - Company Analysis', () => {
         techStack: JSON.stringify(mockAnalysisResult.technologies),
         companyValues: JSON.stringify(mockAnalysisResult.values),
         confidenceScore: mockAnalysisResult.confidenceScore,
-        rawData: JSON.stringify(mockAnalysisResult),
+        dataCompleteness: mockAnalysisResult.dataCompleteness,
+        sourceSite: mockCompanyAnalysisJobData.sourceSite,
+        rawData: JSON.stringify({
+          ...mockAnalysisResult,
+          companyScore: null,
+          structuredData: null,
+          enhancedAnalysis: false,
+        }),
       });
     });
 
