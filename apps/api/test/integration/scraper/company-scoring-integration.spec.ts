@@ -1,10 +1,9 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { TestingModule } from '@nestjs/testing';
 import { CompanyProfileScraper } from '../../../src/modules/scraper/services/company-profile.scraper';
 import { DevBgCompanyExtractor } from '../../../src/modules/scraper/services/devbg-company-extractor.service';
 import { CompanyScoringService } from '../../../src/modules/company/services/company-scoring.service';
 import { PrismaService } from '../../../src/common/database/prisma.service';
 import { TestModule } from '../../test-utils/test.module';
-import { DatabaseHelper } from '../../test-utils/database.helper';
 import { MockDataFactory } from '../../test-utils/mock-data.factory';
 import axios from 'axios';
 import { ScoringInput } from '../../../src/modules/company/interfaces/scoring.interface';
@@ -496,9 +495,9 @@ describe('Company Scoring Integration', () => {
     it('should handle network errors gracefully', async () => {
       mockedAxios.get.mockRejectedValue(new Error('Network error'));
 
-      await expect(async () => {
-        await companyProfileScraper.scrapeCompanyProfile('https://dev.bg/company/nonexistent/');
-      }).rejects.toThrow('Network error');
+      const result = await companyProfileScraper.scrapeDevBgCompanyProfile('https://dev.bg/company/nonexistent/');
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Network error');
     });
 
     it('should handle malformed HTML gracefully', async () => {

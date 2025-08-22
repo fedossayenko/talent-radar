@@ -79,26 +79,38 @@ export class CompanyValidationService {
     try {
       const urlObj = new URL(url);
       const hostname = urlObj.hostname.toLowerCase();
+      const protocol = urlObj.protocol.toLowerCase();
 
-      // Check if hostname matches known job board domains
-      const isJobBoardDomain = this.jobBoardDomains.some(domain =>
-        hostname.includes(domain) || domain.includes(hostname)
-      );
-
-      if (isJobBoardDomain) {
-        this.logger.warn(`Rejected job board URL as company website: ${url}`);
+      // Only accept HTTP and HTTPS protocols
+      if (protocol !== 'http:' && protocol !== 'https:') {
+        this.logger.warn(`Invalid URL format: ${url}`);
         return false;
       }
 
-      // Check for generic company URLs that don't contain company identifiers
-      const pathPattern = /\/company\/[a-zA-Z0-9\-_]+/;
+      // Check for generic dev.bg company URLs that don't contain company identifiers
+      const pathPattern = /\/company\/[a-zA-Z0-9\-_]+\/?$/;
       if (hostname.includes('dev.bg') && !pathPattern.test(urlObj.pathname)) {
         this.logger.warn(`Rejected generic dev.bg company URL: ${url}`);
         return false;
       }
 
+      // If this is a specific dev.bg company URL that passed the pattern check, allow it
+      const isValidDevBgCompanyUrl = hostname.includes('dev.bg') && pathPattern.test(urlObj.pathname);
+      
+      if (!isValidDevBgCompanyUrl) {
+        // Check if hostname matches known job board domains (but skip dev.bg since we handled it above)
+        const isJobBoardDomain = this.jobBoardDomains.some(domain =>
+          (hostname.includes(domain) || domain.includes(hostname)) && domain !== 'dev.bg'
+        );
+
+        if (isJobBoardDomain) {
+          this.logger.warn(`Rejected job board URL as company website: ${url}`);
+          return false;
+        }
+      }
+
       return true;
-    } catch (error) {
+    } catch {
       this.logger.warn(`Invalid URL format: ${url}`);
       return false;
     }

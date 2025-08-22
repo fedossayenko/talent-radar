@@ -385,48 +385,51 @@ describe('DevBgCompanyExtractor', () => {
         const completeData = {
           name: 'Test',
           description: 'Desc',
-          industry: 'Tech',
-          size: '100',
+          website: 'https://test.com',
+          employees: { global: 100, bulgaria: 50 },
           founded: 2020,
-          location: 'NYC',
+          industry: 'Tech',
           technologies: ['JS'],
           benefits: ['Benefit'],
           values: ['Value'],
-          awards: ['Award'],
-          jobOpenings: 1,
+          locations: { offices: ['Sofia'] },
+          workModel: 'Hybrid',
+          socialLinks: { linkedin: 'https://linkedin.com/company/test', facebook: null },
         };
 
         const partialData = {
           name: 'Test',
           description: 'Desc',
-          industry: null,
-          size: null,
+          website: null,
+          employees: { global: null, bulgaria: null },
           founded: null,
-          location: null,
+          industry: null,
           technologies: [],
           benefits: [],
           values: [],
-          awards: [],
-          jobOpenings: 0,
+          locations: { offices: [] },
+          workModel: null,
+          socialLinks: { linkedin: null, facebook: null },
         };
 
         const minimalData = {
           name: 'Test',
           description: null,
-          industry: null,
-          size: null,
+          website: null,
+          employees: { global: null, bulgaria: null },
           founded: null,
-          location: null,
+          industry: null,
           technologies: [],
           benefits: [],
           values: [],
-          awards: [],
-          jobOpenings: 0,
+          locations: { offices: [] },
+          workModel: null,
+          socialLinks: { linkedin: null, facebook: null },
         };
 
         expect(service['calculateDataCompleteness'](completeData)).toBe(100);
-        expect(service['calculateDataCompleteness'](partialData)).toBe(20);
-        expect(service['calculateDataCompleteness'](minimalData)).toBe(10);
+        expect(service['calculateDataCompleteness'](partialData)).toBe(15);
+        expect(service['calculateDataCompleteness'](minimalData)).toBe(8);
       });
     });
   });

@@ -160,6 +160,7 @@ export class JobParserService {
       
       // Look for external company website links
       let website: string | undefined;
+      let websiteWithKeyword: string | undefined; // Priority for links with website keywords
       
       // Common patterns for company websites
       const websitePatterns = [
@@ -187,20 +188,28 @@ export class JobParserService {
               !href.includes('jobs.bg') &&
               !href.includes('jobboardfinder.com') &&
               !href.includes('indeed.com') &&
-              !href.includes('glassdoor.com') &&
-              !website) {
+              !href.includes('glassdoor.com')) {
             
-            // Prefer links that look like company websites
-            if (linkText.includes('website') || 
-                linkText.includes('сайт') ||
-                href.match(/^https?:\/\/[a-zA-Z0-9\-_.]+\.(com|bg|org|net|io)/) ||
+            // Check if this is a valid website URL
+            if (href.match(/^https?:\/\/[a-zA-Z0-9\-_.]+\.(com|bg|org|net|io)/) ||
                 href.match(/^https?:\/\/(www\.)?[a-zA-Z0-9\-_.]+\.[a-zA-Z]{2,}$/)) {
-              website = href;
+              
+              // Prioritize links with website-related text
+              if (linkText.includes('website') || linkText.includes('сайт')) {
+                websiteWithKeyword = href;
+              } else if (!website) {
+                // Only set as fallback if we haven't found any website yet
+                website = href;
+              }
             }
           }
         });
         
-        if (website) break; // Found a website, stop looking
+        // If we found a link with website keyword, use that and stop looking
+        if (websiteWithKeyword) {
+          website = websiteWithKeyword;
+          break;
+        }
       }
       
       // Also check for URLs in text content as fallback

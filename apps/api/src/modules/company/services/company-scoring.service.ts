@@ -4,7 +4,6 @@ import {
   ScoringInput,
   ScoringFactors,
   ScoringWeights,
-  ScoringCriteria,
   DEFAULT_SCORING_WEIGHTS,
   INDUSTRY_WEIGHT_ADJUSTMENTS,
   SIZE_WEIGHT_ADJUSTMENTS,
@@ -686,7 +685,7 @@ export class CompanyScoringService {
   /**
    * Identify company strengths
    */
-  private identifyStrengths(factors: ScoringFactors, input: ScoringInput): string[] {
+  private identifyStrengths(factors: ScoringFactors, _input: ScoringInput): string[] {
     const strengths: string[] = [];
     const factorEntries = Object.entries(factors) as [keyof ScoringFactors, number][];
     
@@ -735,7 +734,7 @@ export class CompanyScoringService {
   /**
    * Identify areas of concern
    */
-  private identifyConcerns(factors: ScoringFactors, input: ScoringInput): string[] {
+  private identifyConcerns(factors: ScoringFactors, _input: ScoringInput): string[] {
     const concerns: string[] = [];
     const factorEntries = Object.entries(factors) as [keyof ScoringFactors, number][];
     
@@ -784,7 +783,7 @@ export class CompanyScoringService {
   /**
    * Generate improvement recommendations
    */
-  private generateRecommendations(factors: ScoringFactors, input: ScoringInput): string[] {
+  private generateRecommendations(factors: ScoringFactors, _input: ScoringInput): string[] {
     const recommendations: string[] = [];
 
     // Analyze low-scoring areas and suggest improvements
