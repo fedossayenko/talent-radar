@@ -60,6 +60,11 @@ services:
       AI_ENABLE_CACHING: "true"
       AI_CACHE_EXPIRY_HOURS: 24
       AI_MAX_CONTENT_LENGTH: 10000
+      # AI Request Logging Configuration
+      AI_REQUEST_LOGGING_ENABLED: "true"
+      AI_LOG_DIRECTORY: "./logs/ai-requests"
+      AI_LOG_RETENTION_DAYS: 30
+      AI_LOG_INCLUDE_RESPONSES: "true"
       # Scraper Configuration
       SCRAPER_ENABLED: "true"
       DEVBG_BASE_URL: https://dev.bg
@@ -81,7 +86,7 @@ services:
       METRICS_ENABLED: "true"
       HEALTH_CHECK_ENABLED: "true"
       # Scraper Limits
-      SCRAPER_MAX_VACANCIES: 10
+      SCRAPER_MAX_VACANCIES: 1
     ports:
       - "3001:3001"
       - "5555:5555"
