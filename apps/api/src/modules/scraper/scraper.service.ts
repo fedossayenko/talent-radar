@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
+import { ConfigService } from '@nestjs/config';
 import { DevBgScraper, DevBgJobListing } from './scrapers/dev-bg.scraper';
 import { VacancyService } from '../vacancy/vacancy.service';
 import { CompanyService } from '../company/company.service';
@@ -47,6 +48,7 @@ export class ScraperService {
   private readonly logger = new Logger(ScraperService.name);
 
   constructor(
+    private readonly configService: ConfigService,
     private readonly devBgScraper: DevBgScraper,
     private readonly vacancyService: VacancyService,
     private readonly companyService: CompanyService,
@@ -59,7 +61,18 @@ export class ScraperService {
   }
 
   async scrapeDevBg(options: ScrapingOptions = {}): Promise<ScrapingResult> {
-    const { limit, enableAiExtraction = true, enableCompanyAnalysis = true } = options;
+    let { limit } = options;
+    const { enableAiExtraction = true, enableCompanyAnalysis = true } = options;
+    
+    // If no explicit limit is provided, use the configured maxVacancies
+    if (!limit) {
+      const maxVacancies = this.configService.get<number>('scraper.jobProcessing.maxVacancies', 0);
+      if (maxVacancies > 0) {
+        limit = maxVacancies;
+        this.logger.log(`Using configured vacancy limit: ${limit} vacancies`);
+      }
+    }
+    
     const startTime = Date.now();
     this.logger.log(`Starting dev.bg scraping process${limit ? ` (limit: ${limit} vacancies)` : ''} (AI: ${enableAiExtraction}, Company: ${enableCompanyAnalysis})`);
 

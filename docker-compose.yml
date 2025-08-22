@@ -1,17 +1,41 @@
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: talent-radar-redis
+  postgres:
+    image: postgres:16-alpine
+    container_name: talent-radar-postgres
+    environment:
+      POSTGRES_DB: talent_radar
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_password_change_in_production}
+    # Expose port for e2e tests (comment out for production)
     ports:
-      - "6379:6379"
+      - "5432:5432"
     volumes:
-      - redis_data:/data
-      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - talent-radar-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d talent_radar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: talent-radar-redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev_redis_password_change_in_production}
+    # Remove port exposure - only accessible within Docker network
+    # ports:
+    #   - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${REDIS_PASSWORD:-dev_redis_password_change_in_production}"]
+    networks:
+      - talent-radar-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-dev_redis_password_change_in_production}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,8 +49,9 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3001
-      DATABASE_URL: file:./data/dev.db
-      REDIS_URL: redis://redis:6379
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_password_change_in_production}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-dev_postgres_password_change_in_production}@postgres:5432/talent_radar
+      REDIS_URL: redis://:${REDIS_PASSWORD:-dev_redis_password_change_in_production}@redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       LOG_LEVEL: debug
@@ -40,6 +65,11 @@ services:
       AI_ENABLE_CACHING: "true"
       AI_CACHE_EXPIRY_HOURS: 24
       AI_MAX_CONTENT_LENGTH: 10000
+      # AI Request Logging Configuration
+      AI_REQUEST_LOGGING_ENABLED: "true"
+      AI_LOG_DIRECTORY: "./logs/ai-requests"
+      AI_LOG_RETENTION_DAYS: 30
+      AI_LOG_INCLUDE_RESPONSES: "true"
       # Scraper Configuration
       SCRAPER_ENABLED: "true"
       DEVBG_BASE_URL: https://dev.bg
@@ -61,16 +91,18 @@ services:
       METRICS_ENABLED: "true"
       HEALTH_CHECK_ENABLED: "true"
       # Scraper Limits
-      SCRAPER_MAX_VACANCIES: 20
+      SCRAPER_MAX_VACANCIES: 1
     ports:
       - "3001:3001"
       - "5555:5555"
     volumes:
       - ./apps/api/src:/app/apps/api/src:ro
       - ./packages:/app/packages:ro
-      - api_data:/app/data
     depends_on:
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - talent-radar-network
     restart: unless-stopped
@@ -120,7 +152,9 @@ services:
     image: ghcr.io/joeferner/redis-commander:latest
     container_name: talent-radar-redis-commander
     environment:
-      REDIS_HOSTS: local:redis:6379
+      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD:-dev_redis_password_change_in_production}
+      HTTP_USER: admin
+      HTTP_PASSWORD: ${REDIS_COMMANDER_PASSWORD:-admin_change_in_production}
     ports:
       - "8081:8081"
     depends_on:
@@ -130,9 +164,10 @@ services:
     profiles:
       - tools
 
+
 volumes:
-  api_data:
-    name: talent-radar-api-data
+  postgres_data:
+    name: talent-radar-postgres-data
   redis_data:
     name: talent-radar-redis-data
 

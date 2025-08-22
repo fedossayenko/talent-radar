@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { AiService, CompanyProfileAnalysisResult, CompanyWebsiteAnalysisResult, ConsolidatedCompanyAnalysisResult } from './ai.service';
 import { RedisService } from '../../common/redis/redis.service';
 import { RedisMockService } from '../../../test/test-utils/redis-mock.service';
+import { AiRequestLoggerService } from '../../common/ai-logging/ai-request-logger.service';
+import { ContentExtractorService } from '../scraper/services/content-extractor.service';
 import OpenAI from 'openai';
 
 // Mock HashingUtil
@@ -145,12 +147,40 @@ describe('AiService - Company Analysis Methods', () => {
           provide: RedisService,
           useClass: RedisMockService,
         },
+        {
+          provide: AiRequestLoggerService,
+          useValue: {
+            isEnabled: jest.fn().mockReturnValue(false),
+            getLogDirectoryPath: jest.fn().mockReturnValue('/tmp/test-logs'),
+            logRequest: jest.fn(),
+            logResponse: jest.fn(),
+            logError: jest.fn(),
+          },
+        },
+        {
+          provide: ContentExtractorService,
+          useValue: {
+            preprocessHtml: jest.fn().mockImplementation((html) => ({
+              processedContent: html,
+              markdown: html, // Return the processed markdown content
+              html: html,     // Fallback to original HTML
+              metadata: {
+                originalSize: html.length,
+                processedSize: html.length,
+                compressionRatio: 1.0,
+                tokensEstimate: Math.floor(html.length / 4),
+                sectionCount: 1,
+                language: 'en',
+              },
+            })),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<AiService>(AiService);
     configService = module.get<jest.Mocked<ConfigService>>(ConfigService);
-    redisService = module.get<RedisMockService>(RedisService);
+    redisService = module.get<RedisMockService>(RedisService) as RedisMockService;
 
     // Replace the OpenAI instance with our mock
     (service as any).openai = mockOpenAI;
@@ -264,6 +294,34 @@ describe('AiService - Company Analysis Methods', () => {
             provide: RedisService,
             useClass: RedisMockService,
           },
+          {
+            provide: AiRequestLoggerService,
+            useValue: {
+              isEnabled: jest.fn().mockReturnValue(false),
+              getLogDirectoryPath: jest.fn().mockReturnValue('/tmp/test-logs'),
+              logRequest: jest.fn(),
+              logResponse: jest.fn(),
+              logError: jest.fn(),
+            },
+          },
+          {
+            provide: ContentExtractorService,
+            useValue: {
+              preprocessHtml: jest.fn().mockImplementation((html) => ({
+                processedContent: html,
+                markdown: html,
+                html: html,
+                metadata: {
+                  originalSize: html.length,
+                  processedSize: html.length,
+                  compressionRatio: 1.0,
+                  tokensEstimate: Math.floor(html.length / 4),
+                  sectionCount: 1,
+                  language: 'en',
+                },
+              })),
+            },
+          },
         ],
       }).compile();
 
@@ -274,7 +332,7 @@ describe('AiService - Company Analysis Methods', () => {
         choices: [
           {
             message: {
-              content: `Here's the analysis: ${JSON.stringify(mockCompanyProfileAnalysis)}`,
+              content: JSON.stringify(mockCompanyProfileAnalysis),
             },
           },
         ],
@@ -481,6 +539,34 @@ describe('AiService - Company Analysis Methods', () => {
           {
             provide: RedisService,
             useClass: RedisMockService,
+          },
+          {
+            provide: AiRequestLoggerService,
+            useValue: {
+              isEnabled: jest.fn().mockReturnValue(false),
+              getLogDirectoryPath: jest.fn().mockReturnValue('/tmp/test-logs'),
+              logRequest: jest.fn(),
+              logResponse: jest.fn(),
+              logError: jest.fn(),
+            },
+          },
+          {
+            provide: ContentExtractorService,
+            useValue: {
+              preprocessHtml: jest.fn().mockImplementation((html) => ({
+                processedContent: html,
+                markdown: html,
+                html: html,
+                metadata: {
+                  originalSize: html.length,
+                  processedSize: html.length,
+                  compressionRatio: 1.0,
+                  tokensEstimate: Math.floor(html.length / 4),
+                  sectionCount: 1,
+                  language: 'en',
+                },
+              })),
+            },
           },
         ],
       }).compile();

@@ -288,7 +288,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     for (const line of lines) {
       if (line && !line.startsWith('#') && line.includes(':')) {
         const [key, value] = line.split(':');
-        result[key] = isNaN(Number(value)) ? value : Number(value);
+        if (key) { // Only process lines with non-empty keys
+          result[key] = isNaN(Number(value)) ? value : Number(value);
+        }
       }
     }
     

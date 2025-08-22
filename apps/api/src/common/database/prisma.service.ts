@@ -1,6 +1,23 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+
+// Types for database statistics queries
+interface TableStatsRow {
+  schemaname: string;
+  tablename: string;
+  inserts: bigint;
+  updates: bigint;
+  deletes: bigint;
+  live_tuples: bigint;
+  dead_tuples: bigint;
+}
+
+interface ConnectionStatsRow {
+  total_connections: bigint;
+  active_connections: bigint;
+  idle_connections: bigint;
+}
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -71,10 +88,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         };
       }
 
-      const tables = await this.$queryRaw`
+      const tables = await this.$queryRaw<TableStatsRow[]>(Prisma.sql`
         SELECT 
           schemaname,
-          tablename,
+          relname as tablename,
           n_tup_ins as inserts,
           n_tup_upd as updates,
           n_tup_del as deletes,
@@ -82,19 +99,36 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           n_dead_tup as dead_tuples
         FROM pg_stat_user_tables
         ORDER BY n_live_tup DESC;
-      `;
+      `);
 
-      const connections = await this.$queryRaw`
+      const connections = await this.$queryRaw<ConnectionStatsRow[]>(Prisma.sql`
         SELECT 
           count(*) as total_connections,
           count(*) FILTER (WHERE state = 'active') as active_connections,
           count(*) FILTER (WHERE state = 'idle') as idle_connections
         FROM pg_stat_activity;
-      `;
+      `);
+
+      // Convert BigInt values to strings for JSON serialization
+      const sanitizedTables = tables.map(table => ({
+        ...table,
+        inserts: table.inserts?.toString(),
+        updates: table.updates?.toString(),
+        deletes: table.deletes?.toString(),
+        live_tuples: table.live_tuples?.toString(),
+        dead_tuples: table.dead_tuples?.toString(),
+      }));
+
+      const sanitizedConnections = {
+        ...connections[0],
+        total_connections: connections[0].total_connections?.toString(),
+        active_connections: connections[0].active_connections?.toString(),
+        idle_connections: connections[0].idle_connections?.toString(),
+      };
 
       return {
-        tables,
-        connections: connections[0],
+        tables: sanitizedTables,
+        connections: sanitizedConnections,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
@@ -104,11 +138,28 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   /**
-   * Execute raw SQL with logging
+   * Execute raw SQL with logging - Uses parameterized queries for security
+   * @deprecated Use $queryRaw with template literals instead for better type safety
    */
   async executeRaw(sql: string, params?: any[]): Promise<any> {
+    // Block obviously dangerous SQL patterns
+    const dangerousPatterns = [
+      /;\s*(drop|delete|truncate|alter|create|insert|update)\s+/i,
+      /union\s+(all\s+)?select/i,
+      /--[^\r\n]*/,
+      /\/\*[\s\S]*?\*\//
+    ];
+
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(sql)) {
+        this.logger.warn(`Potentially malicious SQL query blocked: ${sql}`);
+        throw new Error('Malicious query blocked');
+      }
+    }
+
     try {
       this.logger.debug(`Executing raw SQL: ${sql}`, { params });
+      // Note: Still using $queryRawUnsafe but with validation - should migrate to $queryRaw template literals
       return await this.$queryRawUnsafe(sql, ...(params || []));
     } catch (error) {
       this.logger.error(`Raw SQL execution failed: ${sql}`, error);

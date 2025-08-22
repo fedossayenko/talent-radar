@@ -32,6 +32,14 @@ export const aiConfig = registerAs('ai', () => {
       prioritizeKeywords: true,
     },
     
+    // Request logging configuration
+    requestLogging: {
+      enabled: process.env.AI_REQUEST_LOGGING_ENABLED === 'true',
+      logDirectory: process.env.AI_LOG_DIRECTORY || './logs/ai-requests',
+      retentionDays: parseInt(process.env.AI_LOG_RETENTION_DAYS || '30', 10),
+      includeResponses: process.env.AI_LOG_INCLUDE_RESPONSES !== 'false',
+    },
+    
     // Main prompt template for vacancy extraction
     vacancyPrompt: `Extract structured job vacancy data from this content:
 
@@ -197,7 +205,7 @@ RESPOND ONLY WITH VALID JSON. No explanations.`,
     prompts: {
       vacancyExtraction: {
         temperature: 0.1,
-        maxTokens: 2000,
+        maxTokens: 4000,
         template: config.vacancyPrompt,
       },
       contentCleaning: {

@@ -34,6 +34,7 @@ export default registerAs('scraper', () => ({
   // Job processing settings
   jobProcessing: {
     batchSize: parseInt(process.env.SCRAPER_BATCH_SIZE || '50', 10),
+    maxVacancies: parseInt(process.env.SCRAPER_MAX_VACANCIES || '0', 10), // 0 means no limit
     includeJobDetails: process.env.SCRAPER_INCLUDE_DETAILS !== 'false',
     enableTranslation: process.env.SCRAPER_ENABLE_TRANSLATION !== 'false',
     enableTechDetection: process.env.SCRAPER_ENABLE_TECH_DETECTION !== 'false',

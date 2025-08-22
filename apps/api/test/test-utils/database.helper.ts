@@ -6,7 +6,8 @@ export class DatabaseHelper {
 
   static async initializeTestDatabase(): Promise<PrismaClient> {
     const workerId = process.env.JEST_WORKER_ID || '1';
-    const databaseUrl = `file:./test-${workerId}.db`;
+    // Use PostgreSQL for tests with worker-specific database names
+    const databaseUrl = process.env.DATABASE_URL || `postgresql://postgres:password@localhost:5432/talent_radar_test_${workerId}`;
 
     if (!this.prisma) {
       this.prisma = new PrismaClient({
@@ -19,16 +20,25 @@ export class DatabaseHelper {
 
       await this.prisma.$connect();
 
-      // Simple approach: use db push to ensure schema is up to date
+      // Create test database if it doesn't exist and run migrations
       try {
-        execSync(`DATABASE_URL=${databaseUrl} npx prisma db push --force-reset --skip-generate`, {
+        execSync(`DATABASE_URL="${databaseUrl}" npx prisma migrate dev --name test_init`, {
           stdio: 'inherit',
           timeout: 30000,
         });
-      } catch (error) {
-        // eslint-disable-next-line no-console
-        console.warn('Database migration warning:', error.message);
-        // Continue anyway - tables might already exist
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (_error) {
+        // If migrations fail, try db push instead
+        try {
+          execSync(`DATABASE_URL="${databaseUrl}" npx prisma db push --force-reset --skip-generate`, {
+            stdio: 'inherit',
+            timeout: 30000,
+          });
+        } catch (pushError) {
+          // eslint-disable-next-line no-console
+          console.warn('Database setup warning:', pushError.message);
+          // Continue anyway - tables might already exist
+        }
       }
     }
 
@@ -39,7 +49,7 @@ export class DatabaseHelper {
     if (!this.prisma) return;
 
     try {
-      // Clear all tables in the correct order for SQLite (respecting foreign key constraints)
+      // Clear all tables in the correct order for PostgreSQL (respecting foreign key constraints)
       // Use try-catch for each table to handle missing tables gracefully
       try {
         await this.prisma.application.deleteMany();
@@ -61,6 +71,12 @@ export class DatabaseHelper {
 
       try {
         await this.prisma.companyAnalysis.deleteMany();
+      } catch {
+        // Table might not exist yet, ignore
+      }
+
+      try {
+        await this.prisma.companySource.deleteMany();
       } catch {
         // Table might not exist yet, ignore
       }

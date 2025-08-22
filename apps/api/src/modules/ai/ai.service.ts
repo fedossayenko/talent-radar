@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import { RedisService } from '../../common/redis/redis.service';
 import { HashingUtil } from '../../common/utils/hashing.util';
+import { AiRequestLoggerService } from '../../common/ai-logging/ai-request-logger.service';
+import { ContentExtractorService } from '../scraper/services/content-extractor.service';
 
 export interface VacancyExtractionResult {
   title: string | null;
@@ -119,6 +121,8 @@ export class AiService {
   constructor(
     private readonly configService: ConfigService,
     private readonly redisService: RedisService,
+    private readonly aiRequestLogger: AiRequestLoggerService,
+    private readonly contentExtractor: ContentExtractorService,
   ) {
     this.config = this.configService.get('ai');
     
@@ -135,6 +139,41 @@ export class AiService {
     });
 
     this.logger.log('AiService initialized with OpenAI integration');
+    
+    // Log AI request logger status
+    if (this.aiRequestLogger.isEnabled()) {
+      this.logger.log(`AI request logging enabled. Files stored in: ${this.aiRequestLogger.getLogDirectoryPath()}`);
+    }
+  }
+
+  /**
+   * Wrapper method for OpenAI API calls that includes request/response logging
+   */
+  private async callOpenAiWithLogging(
+    methodName: string,
+    apiCall: any
+  ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
+    const startTime = Date.now();
+    let requestId: string;
+
+    try {
+      // Log the request
+      requestId = await this.aiRequestLogger.logRequest(methodName, apiCall);
+      
+      // Make the API call
+      const response = await this.openai.chat.completions.create(apiCall);
+      
+      // Log the response
+      const duration = Date.now() - startTime;
+      await this.aiRequestLogger.logResponse(requestId, response, duration);
+      
+      return response;
+    } catch (error) {
+      // Log the error
+      const duration = Date.now() - startTime;
+      await this.aiRequestLogger.logResponse(requestId!, null, duration, error);
+      throw error;
+    }
   }
 
   /**
@@ -165,7 +204,7 @@ export class AiService {
       }
 
       // Clean and optimize content
-      const optimizedContent = await this.optimizeContentForExtraction(content);
+      const optimizedContent = await this.optimizeContentForExtraction(content, sourceUrl);
       
       // Prepare prompt
       const prompt = this.config.prompts.vacancyExtraction.template
@@ -194,7 +233,7 @@ export class AiService {
       }
       // GPT-5 Nano uses default temperature and doesn't support structured response format
 
-      const response = await this.openai.chat.completions.create(apiCall);
+      const response = await this.callOpenAiWithLogging('extractVacancyData', apiCall);
 
       const extractedData = this.parseExtractionResponse(response.choices[0]?.message?.content, isGpt5Nano);
       
@@ -250,7 +289,7 @@ export class AiService {
       }
 
       // Clean and optimize content
-      const optimizedContent = await this.optimizeContentForExtraction(content);
+      const optimizedContent = await this.optimizeContentForExtraction(content, sourceUrl);
       
       // Prepare prompt
       const prompt = this.config.prompts.companyProfile.template
@@ -277,7 +316,7 @@ export class AiService {
         apiCall.response_format = { type: 'json_object' as const };
       }
 
-      const response = await this.openai.chat.completions.create(apiCall);
+      const response = await this.callOpenAiWithLogging('analyzeCompanyProfile', apiCall);
       const analysisResult = this.parseCompanyAnalysisResponse(response.choices[0]?.message?.content, isGpt5Nano);
       
       if (!analysisResult) {
@@ -327,7 +366,7 @@ export class AiService {
       }
 
       // Clean and optimize content
-      const optimizedContent = await this.optimizeContentForExtraction(content);
+      const optimizedContent = await this.optimizeContentForExtraction(content, sourceUrl);
       
       // Prepare prompt
       const prompt = this.config.prompts.companyWebsite.template
@@ -354,7 +393,7 @@ export class AiService {
         apiCall.response_format = { type: 'json_object' as const };
       }
 
-      const response = await this.openai.chat.completions.create(apiCall);
+      const response = await this.callOpenAiWithLogging('analyzeCompanyWebsite', apiCall);
       const analysisResult = this.parseCompanyAnalysisResponse(response.choices[0]?.message?.content, isGpt5Nano, 'website');
       
       if (!analysisResult) {
@@ -435,7 +474,7 @@ export class AiService {
         apiCall.response_format = { type: 'json_object' as const };
       }
 
-      const response = await this.openai.chat.completions.create(apiCall);
+      const response = await this.callOpenAiWithLogging('consolidateCompanyAnalysis', apiCall);
       const analysisResult = this.parseCompanyAnalysisResponse(response.choices[0]?.message?.content, isGpt5Nano, 'consolidated');
       
       if (!analysisResult) {
@@ -481,7 +520,7 @@ export class AiService {
         apiCall.temperature = this.config.prompts.contentCleaning.temperature;
       }
 
-      const response = await this.openai.chat.completions.create(apiCall);
+      const response = await this.callOpenAiWithLogging('cleanContent', apiCall);
 
       return response.choices[0]?.message?.content || content;
     } catch (error) {
@@ -517,7 +556,7 @@ export class AiService {
         apiCall.response_format = { type: 'json_object' as const };
       }
 
-      const response = await this.openai.chat.completions.create(apiCall);
+      const response = await this.callOpenAiWithLogging('assessContentQuality', apiCall);
 
       return JSON.parse(response.choices[0]?.message?.content || '{}');
     } catch (error) {
@@ -530,24 +569,50 @@ export class AiService {
   /**
    * Optimize content for token efficiency
    */
-  private async optimizeContentForExtraction(content: string): Promise<string> {
-    const maxLength = this.config.tokenOptimization.maxContentLength;
-    
-    if (content.length <= maxLength) {
-      return content;
-    }
+  private async optimizeContentForExtraction(content: string, sourceUrl?: string): Promise<string> {
+    try {
+      // Use the enhanced preprocessing pipeline for HTML content
+      if (content.includes('<html') || content.includes('<div') || content.includes('<p')) {
+        this.logger.debug('Processing HTML content with enhanced preprocessing pipeline');
+        
+        const preprocessed = await this.contentExtractor.preprocessHtml(content, sourceUrl || 'unknown', {
+          convertToMarkdown: true,
+          extractSpecificSections: true,
+          optimizeForAI: true,
+          maxTokens: this.config.tokenOptimization.maxContentLength / 4, // Convert chars to tokens
+          preserveStructure: true,
+        });
 
-    if (this.config.tokenOptimization.enableContentTruncation) {
-      // Smart truncation: keep important sections
-      if (this.config.tokenOptimization.preserveImportantSections) {
-        return this.smartTruncateContent(content, maxLength);
-      } else {
-        // Simple truncation
-        return content.substring(0, maxLength);
+        this.logger.debug('Preprocessing completed', {
+          originalSize: preprocessed.metadata.originalSize,
+          processedSize: preprocessed.metadata.processedSize,
+          compressionRatio: preprocessed.metadata.compressionRatio,
+          tokensEstimate: preprocessed.metadata.tokensEstimate,
+          sectionsFound: preprocessed.metadata.sectionCount,
+          language: preprocessed.metadata.language,
+        });
+
+        // Return the markdown content (70% size reduction achieved)
+        return preprocessed.markdown || preprocessed.html;
       }
-    }
+      
+      // Fallback to legacy optimization for non-HTML content
+      const maxLength = this.config.tokenOptimization.maxContentLength;
+      
+      if (content.length <= maxLength) {
+        return content;
+      }
 
-    return content;
+      // Simple truncation for non-HTML content
+      return content.substring(0, maxLength);
+      
+    } catch (error) {
+      this.logger.error('Failed to preprocess content, falling back to simple truncation:', error);
+      
+      // Fallback to simple truncation
+      const maxLength = this.config.tokenOptimization.maxContentLength;
+      return content.length > maxLength ? content.substring(0, maxLength) : content;
+    }
   }
 
   /**
@@ -604,24 +669,26 @@ export class AiService {
     if (!response) return null;
 
     try {
-      // Log the raw response for debugging
-      this.logger.debug('Raw AI response:', response);
+      // Log the raw response for debugging - force to info level for visibility
+      this.logger.log('=== AI RESPONSE DEBUGGING ===');
+      this.logger.log(`Raw AI response length: ${response?.length || 0}`);
+      this.logger.log(`Raw AI response: ${response?.substring(0, 500)}...`);
+      this.logger.log(`Is unstructured model: ${isUnstructuredModel}`);
       
-      let parsed: any;
-      
-      if (isUnstructuredModel) {
-        // For models like GPT-5 Nano that don't support structured output
-        // Try to extract JSON from the response text
-        parsed = this.extractJsonFromText(response);
-      } else {
-        // Standard JSON parsing for structured models
-        parsed = JSON.parse(response);
-      }
+      // GPT-5 Nano produces valid JSON, just doesn't support response_format parameter
+      // All models should use standard JSON parsing
+      const parsed = JSON.parse(response);
       
       if (!parsed) {
-        this.logger.warn('Failed to extract structured data from response');
+        this.logger.log('Failed to extract structured data from response');
+        this.logger.log(`Response that failed: ${response}`);
         return null;
       }
+      
+      this.logger.log(`Successfully parsed response. Type: ${typeof parsed}`);
+      this.logger.log(`Parsed keys: ${Object.keys(parsed || {}).join(', ')}`);
+      this.logger.log(`Confidence score: ${parsed?.confidenceScore}`);
+      this.logger.log(`Quality score: ${parsed?.qualityScore}`);
       
       // Validate required fields
       if (!parsed.confidenceScore || parsed.confidenceScore < 0 || parsed.confidenceScore > 100) {
@@ -642,16 +709,29 @@ export class AiService {
    * Extract JSON from unstructured text response (for models that don't support structured output)
    */
   private extractJsonFromText(text: string): any | null {
+    this.logger.log('=== EXTRACTING JSON FROM UNSTRUCTURED TEXT ===');
+    this.logger.log(`Text length: ${text.length}`);
+    this.logger.log(`First 200 chars: ${text.substring(0, 200)}`);
+    
     try {
       // First try to find JSON block in the text
       const jsonMatch = text.match(/\{[\s\S]*\}/);
+      this.logger.log(`JSON match found: ${!!jsonMatch}`);
+      
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        this.logger.log(`JSON match content: ${jsonMatch[0].substring(0, 200)}...`);
+        const parsed = JSON.parse(jsonMatch[0]);
+        this.logger.log(`Successfully parsed JSON match`);
+        return parsed;
       }
       
       // If no JSON found, try to parse the entire response as JSON
-      return JSON.parse(text);
-    } catch {
+      this.logger.log('No JSON match found, trying to parse entire text as JSON');
+      const parsed = JSON.parse(text);
+      this.logger.log(`Successfully parsed entire text as JSON`);
+      return parsed;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
       this.logger.warn('Could not extract JSON from text response, using fallback parsing');
       
       // Fallback: create a basic structure if the model provided readable text
@@ -679,19 +759,13 @@ export class AiService {
   /**
    * Parse company analysis response (handles different analysis types)
    */
-  private parseCompanyAnalysisResponse(response: string | undefined, isUnstructuredModel: boolean = false, analysisType: 'profile' | 'website' | 'consolidated' = 'profile'): any | null {
+  private parseCompanyAnalysisResponse(response: string | undefined, _isUnstructuredModel: boolean = false, analysisType: 'profile' | 'website' | 'consolidated' = 'profile'): any | null {
     if (!response) return null;
 
     try {
-      let parsed: any;
-      
-      if (isUnstructuredModel) {
-        // For models like GPT-5 Nano that don't support structured output
-        parsed = this.extractJsonFromText(response);
-      } else {
-        // Standard JSON parsing for structured models
-        parsed = JSON.parse(response);
-      }
+      // GPT-5 Nano produces valid JSON, just doesn't support response_format parameter
+      // All models should use standard JSON parsing
+      const parsed = JSON.parse(response);
       
       if (!parsed) {
         this.logger.warn(`Failed to extract structured data from company ${analysisType} analysis response`);

@@ -1,8 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
+import { APP_GUARD } from '@nestjs/core';
+
+// Authentication
+import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 // Feature modules
 import { VacancyModule } from './modules/vacancy/vacancy.module';
@@ -37,24 +42,48 @@ import { MetricsModule } from './common/metrics/metrics.module';
       envFilePath: ['.env.local', '.env'],
     }),
 
-    // Rate limiting
-    ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 1000,
-        limit: 3,
+    // Rate limiting - relaxed for test environment
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const isTest = configService.get<string>('NODE_ENV') === 'test';
+        return isTest ? [
+          // Very permissive limits for testing
+          {
+            name: 'short',
+            ttl: 1000,
+            limit: 1000,
+          },
+          {
+            name: 'medium',
+            ttl: 10000,
+            limit: 5000,
+          },
+          {
+            name: 'long',
+            ttl: 60000,
+            limit: 10000,
+          },
+        ] : [
+          // Production limits
+          {
+            name: 'short',
+            ttl: 1000,
+            limit: 3,
+          },
+          {
+            name: 'medium',
+            ttl: 10000,
+            limit: 20,
+          },
+          {
+            name: 'long',
+            ttl: 60000,
+            limit: 100,
+          },
+        ];
       },
-      {
-        name: 'medium',
-        ttl: 10000,
-        limit: 20,
-      },
-      {
-        name: 'long',
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
+    }),
 
     // Task scheduling
     ScheduleModule.forRoot(),
@@ -83,6 +112,9 @@ import { MetricsModule } from './common/metrics/metrics.module';
     DatabaseModule,
     RedisModule,
 
+    // Authentication
+    AuthModule,
+
     // Health and monitoring
     HealthModule,
     MetricsModule,
@@ -97,6 +129,17 @@ import { MetricsModule } from './common/metrics/metrics.module';
     ApplicationModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    // Global authentication guard
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    // Global rate limiting guard
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

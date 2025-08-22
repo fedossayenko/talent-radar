@@ -1,9 +1,33 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: talent-radar-postgres-prod
+    environment:
+      POSTGRES_DB: talent_radar
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Remove port exposure in production - only accessible within Docker network
+    # ports:
+    #   - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - talent-radar-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d talent_radar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     container_name: talent-radar-redis-prod
-    ports:
-      - "6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    # Remove port exposure in production - only accessible within Docker network
+    # ports:
+    #   - "6379:6379"
     volumes:
       - redis_data:/data
       - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
@@ -11,7 +35,7 @@ services:
     networks:
       - talent-radar-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -25,8 +49,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: file:./data/prod.db
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/talent_radar
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       LOG_LEVEL: info
@@ -38,6 +62,11 @@ services:
       AI_ENABLE_CACHING: "true"
       AI_CACHE_EXPIRY_HOURS: 24
       AI_MAX_CONTENT_LENGTH: 10000
+      # AI Request Logging Configuration
+      AI_REQUEST_LOGGING_ENABLED: "true"
+      AI_LOG_DIRECTORY: "./logs/ai-requests"
+      AI_LOG_RETENTION_DAYS: 30
+      AI_LOG_INCLUDE_RESPONSES: "true"
       # Scraper Configuration
       SCRAPER_ENABLED: "true"
       DEVBG_BASE_URL: https://dev.bg
@@ -59,12 +88,12 @@ services:
       METRICS_ENABLED: "true"
       HEALTH_CHECK_ENABLED: "true"
       # Scraper Limits
-      SCRAPER_MAX_VACANCIES: 20
+      SCRAPER_MAX_VACANCIES: 1
     ports:
       - "3001:3001"
-    volumes:
-      - api_data:/app/data
     depends_on:
+      postgres:
+        condition: service_healthy
       redis:
         condition: service_healthy
     networks:
@@ -108,8 +137,8 @@ services:
     container_name: talent-radar-scraper-prod
     environment:
       NODE_ENV: production
-      DATABASE_URL: file:./data/prod.db
-      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/talent_radar
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
       SCRAPER_MODE: true
@@ -124,6 +153,11 @@ services:
       AI_ENABLE_CACHING: "true"
       AI_CACHE_EXPIRY_HOURS: 24
       AI_MAX_CONTENT_LENGTH: 10000
+      # AI Request Logging Configuration
+      AI_REQUEST_LOGGING_ENABLED: "true"
+      AI_LOG_DIRECTORY: "./logs/ai-requests"
+      AI_LOG_RETENTION_DAYS: 30
+      AI_LOG_INCLUDE_RESPONSES: "true"
       # Scraper Configuration
       SCRAPER_ENABLED: "true"
       DEVBG_BASE_URL: https://dev.bg
@@ -145,7 +179,7 @@ services:
       METRICS_ENABLED: "true"
       HEALTH_CHECK_ENABLED: "true"
       # Scraper Limits
-      SCRAPER_MAX_VACANCIES: 20
+      SCRAPER_MAX_VACANCIES: 1
     volumes:
       - scraper_data:/app/data
     depends_on:
@@ -159,7 +193,9 @@ services:
     image: ghcr.io/joeferner/redis-commander:latest
     container_name: talent-radar-redis-commander-prod
     environment:
-      REDIS_HOSTS: local:redis:6379
+      REDIS_HOSTS: local:redis:6379:0:${REDIS_PASSWORD}
+      HTTP_USER: admin
+      HTTP_PASSWORD: ${REDIS_COMMANDER_PASSWORD}
     ports:
       - "8081:8081"
     depends_on:

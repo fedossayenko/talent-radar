@@ -20,6 +20,19 @@ jobs:
     
     
     services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: talent_radar_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+          
       redis:
         image: redis:7-alpine
         options: >-
@@ -53,18 +66,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-prisma-
 
-      - name: Setup test database directory
-        run: mkdir -p apps/api/test/tmp
-
       - name: Generate Prisma Client
         run: npm run db:generate
         env:
-          DATABASE_URL: file:./test/tmp/ci-test.db
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/talent_radar_test
 
       - name: Run database migrations
         run: npm run db:migrate
         env:
-          DATABASE_URL: file:./test/tmp/ci-test.db
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/talent_radar_test
 
       - name: Lint code
         run: npm run lint
@@ -75,14 +85,14 @@ jobs:
       - name: Run unit tests
         run: npm run test
         env:
-          DATABASE_URL: file:./test/tmp/ci-test.db
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/talent_radar_test
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
 
       - name: Run E2E tests
         run: npm run test:e2e
         env:
-          DATABASE_URL: file:./test/tmp/ci-test.db
+          DATABASE_URL: postgresql://postgres:password@localhost:5432/talent_radar_test
           REDIS_URL: redis://localhost:6379
           NODE_ENV: test
 
