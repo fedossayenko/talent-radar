@@ -42,24 +42,48 @@ import { MetricsModule } from './common/metrics/metrics.module';
       envFilePath: ['.env.local', '.env'],
     }),
 
-    // Rate limiting
-    ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 1000,
-        limit: 3,
+    // Rate limiting - relaxed for test environment
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const isTest = configService.get<string>('NODE_ENV') === 'test';
+        return isTest ? [
+          // Very permissive limits for testing
+          {
+            name: 'short',
+            ttl: 1000,
+            limit: 1000,
+          },
+          {
+            name: 'medium',
+            ttl: 10000,
+            limit: 5000,
+          },
+          {
+            name: 'long',
+            ttl: 60000,
+            limit: 10000,
+          },
+        ] : [
+          // Production limits
+          {
+            name: 'short',
+            ttl: 1000,
+            limit: 3,
+          },
+          {
+            name: 'medium',
+            ttl: 10000,
+            limit: 20,
+          },
+          {
+            name: 'long',
+            ttl: 60000,
+            limit: 100,
+          },
+        ];
       },
-      {
-        name: 'medium',
-        ttl: 10000,
-        limit: 20,
-      },
-      {
-        name: 'long',
-        ttl: 60000,
-        limit: 100,
-      },
-    ]),
+    }),
 
     // Task scheduling
     ScheduleModule.forRoot(),

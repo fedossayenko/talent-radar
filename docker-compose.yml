@@ -6,9 +6,9 @@ services:
       POSTGRES_DB: talent_radar
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dev_postgres_password_change_in_production}
-    # Remove port exposure - only accessible within Docker network
-    # ports:
-    #   - "5432:5432"
+    # Expose port for e2e tests (comment out for production)
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
