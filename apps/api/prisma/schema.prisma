@@ -31,8 +31,8 @@ model CompanySource {
   @@index([sourceSite])
   @@index([lastScrapedAt])
   @@index([isValid])
-  // Full-text search index for scraped content
-  @@index([scrapedContent], map: "company_sources_scraped_content_idx")
+  // Full-text search index for scraped content - REMOVED due to PostgreSQL 8KB index limit
+  // Large HTML content causes "index row requires 116KB, maximum size is 8191" errors
   @@map("company_sources")
 }
 

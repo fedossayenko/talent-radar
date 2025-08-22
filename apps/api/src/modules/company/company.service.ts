@@ -469,12 +469,12 @@ export class CompanyService {
       // Parse JSON fields for better API response
       const processedAnalyses = company.analyses.map(analysis => ({
         ...analysis,
-        pros: analysis.pros ? JSON.parse(analysis.pros) : [],
-        cons: analysis.cons ? JSON.parse(analysis.cons) : [],
-        growthOpportunities: analysis.growthOpportunities ? JSON.parse(analysis.growthOpportunities) : [],
-        benefits: analysis.benefits ? JSON.parse(analysis.benefits) : [],
-        technologies: analysis.techStack ? JSON.parse(analysis.techStack) : [],
-        values: analysis.companyValues ? JSON.parse(analysis.companyValues) : [],
+        pros: analysis.pros ? (typeof analysis.pros === 'string' ? JSON.parse(analysis.pros) : analysis.pros) : [],
+        cons: analysis.cons ? (typeof analysis.cons === 'string' ? JSON.parse(analysis.cons) : analysis.cons) : [],
+        growthOpportunities: analysis.growthOpportunities ? (typeof analysis.growthOpportunities === 'string' ? JSON.parse(analysis.growthOpportunities) : analysis.growthOpportunities) : [],
+        benefits: analysis.benefits ? (typeof analysis.benefits === 'string' ? JSON.parse(analysis.benefits) : analysis.benefits) : [],
+        technologies: analysis.techStack ? (typeof analysis.techStack === 'string' ? JSON.parse(analysis.techStack) : analysis.techStack) : [],
+        values: analysis.companyValues ? (typeof analysis.companyValues === 'string' ? JSON.parse(analysis.companyValues) : analysis.companyValues) : [],
       }));
 
       return {
@@ -528,12 +528,12 @@ export class CompanyService {
       // Parse JSON fields
       const processedAnalysis = {
         ...latestAnalysis,
-        pros: latestAnalysis.pros ? JSON.parse(latestAnalysis.pros) : [],
-        cons: latestAnalysis.cons ? JSON.parse(latestAnalysis.cons) : [],
-        growthOpportunities: latestAnalysis.growthOpportunities ? JSON.parse(latestAnalysis.growthOpportunities) : [],
-        benefits: latestAnalysis.benefits ? JSON.parse(latestAnalysis.benefits) : [],
-        technologies: latestAnalysis.techStack ? JSON.parse(latestAnalysis.techStack) : [],
-        values: latestAnalysis.companyValues ? JSON.parse(latestAnalysis.companyValues) : [],
+        pros: latestAnalysis.pros ? (typeof latestAnalysis.pros === 'string' ? JSON.parse(latestAnalysis.pros) : latestAnalysis.pros) : [],
+        cons: latestAnalysis.cons ? (typeof latestAnalysis.cons === 'string' ? JSON.parse(latestAnalysis.cons) : latestAnalysis.cons) : [],
+        growthOpportunities: latestAnalysis.growthOpportunities ? (typeof latestAnalysis.growthOpportunities === 'string' ? JSON.parse(latestAnalysis.growthOpportunities) : latestAnalysis.growthOpportunities) : [],
+        benefits: latestAnalysis.benefits ? (typeof latestAnalysis.benefits === 'string' ? JSON.parse(latestAnalysis.benefits) : latestAnalysis.benefits) : [],
+        technologies: latestAnalysis.techStack ? (typeof latestAnalysis.techStack === 'string' ? JSON.parse(latestAnalysis.techStack) : latestAnalysis.techStack) : [],
+        values: latestAnalysis.companyValues ? (typeof latestAnalysis.companyValues === 'string' ? JSON.parse(latestAnalysis.companyValues) : latestAnalysis.companyValues) : [],
         rawData: undefined, // Don't expose raw data in API
       };
 
@@ -602,10 +602,10 @@ export class CompanyService {
         };
 
         insights.highlights = {
-          topPros: latestAnalysis.pros ? JSON.parse(latestAnalysis.pros).slice(0, 3) : [],
-          mainConcerns: latestAnalysis.cons ? JSON.parse(latestAnalysis.cons).slice(0, 2) : [],
-          keyTechnologies: latestAnalysis.techStack ? JSON.parse(latestAnalysis.techStack).slice(0, 5) : [],
-          coreValues: latestAnalysis.companyValues ? JSON.parse(latestAnalysis.companyValues).slice(0, 3) : [],
+          topPros: latestAnalysis.pros ? (typeof latestAnalysis.pros === 'string' ? JSON.parse(latestAnalysis.pros) : latestAnalysis.pros).slice(0, 3) : [],
+          mainConcerns: latestAnalysis.cons ? (typeof latestAnalysis.cons === 'string' ? JSON.parse(latestAnalysis.cons) : latestAnalysis.cons).slice(0, 2) : [],
+          keyTechnologies: latestAnalysis.techStack ? (typeof latestAnalysis.techStack === 'string' ? JSON.parse(latestAnalysis.techStack) : latestAnalysis.techStack).slice(0, 5) : [],
+          coreValues: latestAnalysis.companyValues ? (typeof latestAnalysis.companyValues === 'string' ? JSON.parse(latestAnalysis.companyValues) : latestAnalysis.companyValues).slice(0, 3) : [],
         };
 
         insights.recommendation = this.getRecommendationLevel(latestAnalysis.recommendationScore);
