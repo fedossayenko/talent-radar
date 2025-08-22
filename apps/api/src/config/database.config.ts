@@ -1,7 +1,11 @@
 import { registerAs } from '@nestjs/config';
 
 export const databaseConfig = registerAs('database', () => ({
-  url: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/talent_radar',
+  url: process.env.DATABASE_URL || (
+    process.env.NODE_ENV === 'test' 
+      ? 'postgresql://postgres:dev_postgres_password_change_in_production@localhost:5432/talent_radar_test'
+      : 'postgresql://postgres:password@localhost:5432/talent_radar'
+  ),
   
   // Connection pool settings
   maxConnections: parseInt(process.env.DB_MAX_CONNECTIONS || '20', 10),

@@ -145,17 +145,22 @@ export class JobParserService {
       // These are typically found in company name links or dedicated company sections
       let profileUrl: string | undefined;
       
-      // Check for company profile links (usually /company/ URLs)
+      // Check for company profile links (usually /company/ URLs with specific company name)
       const companyLinks = $('a[href*="/company/"]');
       companyLinks.each((_, element) => {
         const href = $(element).attr('href');
         if (href && href.includes('/company/') && !profileUrl) {
-          profileUrl = href.startsWith('http') ? href : `https://dev.bg${href}`;
+          // Only accept company URLs with specific company identifiers (not generic /company/)
+          const companyUrlPattern = /\/company\/[a-zA-Z0-9\-_]+/;
+          if (companyUrlPattern.test(href) && !href.endsWith('/company/')) {
+            profileUrl = href.startsWith('http') ? href : `https://dev.bg${href}`;
+          }
         }
       });
       
       // Look for external company website links
       let website: string | undefined;
+      let websiteWithKeyword: string | undefined; // Priority for links with website keywords
       
       // Common patterns for company websites
       const websitePatterns = [
@@ -174,26 +179,37 @@ export class JobParserService {
           const href = $(element).attr('href');
           const linkText = $(element).text().toLowerCase();
           
-          // Skip dev.bg URLs and social media/job boards
+          // Skip dev.bg URLs, social media, and job board aggregators
           if (href && 
               !href.includes('dev.bg') && 
               !href.includes('linkedin.com') &&
               !href.includes('facebook.com') &&
               !href.includes('twitter.com') &&
               !href.includes('jobs.bg') &&
-              !website) {
+              !href.includes('jobboardfinder.com') &&
+              !href.includes('indeed.com') &&
+              !href.includes('glassdoor.com')) {
             
-            // Prefer links that look like company websites
-            if (linkText.includes('website') || 
-                linkText.includes('сайт') ||
-                href.match(/^https?:\/\/[a-zA-Z0-9\-_.]+\.(com|bg|org|net|io)/) ||
+            // Check if this is a valid website URL
+            if (href.match(/^https?:\/\/[a-zA-Z0-9\-_.]+\.(com|bg|org|net|io)/) ||
                 href.match(/^https?:\/\/(www\.)?[a-zA-Z0-9\-_.]+\.[a-zA-Z]{2,}$/)) {
-              website = href;
+              
+              // Prioritize links with website-related text
+              if (linkText.includes('website') || linkText.includes('сайт')) {
+                websiteWithKeyword = href;
+              } else if (!website) {
+                // Only set as fallback if we haven't found any website yet
+                website = href;
+              }
             }
           }
         });
         
-        if (website) break; // Found a website, stop looking
+        // If we found a link with website keyword, use that and stop looking
+        if (websiteWithKeyword) {
+          website = websiteWithKeyword;
+          break;
+        }
       }
       
       // Also check for URLs in text content as fallback
@@ -204,6 +220,9 @@ export class JobParserService {
             if (!url.includes('dev.bg') && 
                 !url.includes('linkedin.com') &&
                 !url.includes('facebook.com') &&
+                !url.includes('jobboardfinder.com') &&
+                !url.includes('indeed.com') &&
+                !url.includes('glassdoor.com') &&
                 url.match(/\.(com|bg|org|net|io|eu)/)) {
               website = url;
               break;

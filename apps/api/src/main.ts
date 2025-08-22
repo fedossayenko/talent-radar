@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { WinstonModule } from 'nest-winston';
 import { loggerConfig } from './config/logger.config';
@@ -92,14 +92,13 @@ async function bootstrap() {
   const port = process.env.PORT || 3001;
   await app.listen(port);
 
-  // eslint-disable-next-line no-console
-  console.log(`🚀 TalentRadar API is running on: http://localhost:${port}`);
-  // eslint-disable-next-line no-console
-  console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
+  const logger = new Logger('Bootstrap');
+  logger.log(`🚀 TalentRadar API is running on: http://localhost:${port}`);
+  logger.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
 }
 
 bootstrap().catch((error) => {
-  // eslint-disable-next-line no-console
-  console.error('❌ Failed to start application:', error);
+  const logger = new Logger('Bootstrap');
+  logger.error('❌ Failed to start application:', error);
   process.exit(1);
 });

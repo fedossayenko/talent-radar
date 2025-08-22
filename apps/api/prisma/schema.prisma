@@ -76,7 +76,7 @@ model CompanyAnalysis {
   companyId              String
   sourceSite             String?  // Which site the analysis came from (dev.bg, company website)
   
-  // Scoring metrics
+  // Legacy scoring metrics (kept for backward compatibility)
   cultureScore           Float?   // 0-10 rating for company culture
   retentionRate          Float?   // Employee retention percentage
   workLifeBalance        Float?   // 0-10 rating for work-life balance
@@ -84,6 +84,18 @@ model CompanyAnalysis {
   salaryCompetitiveness  Float?   // 0-10 rating for salary competitiveness
   benefitsScore          Float?   // 0-10 rating for benefits package
   techCulture            Float?   // 0-10 rating for technical culture
+  
+  // Modern comprehensive scoring system (2025)
+  overallScore           Float?   // 0-100 composite score from scoring algorithm
+  scoringFactors         Json?    @db.JsonB // All individual scoring factors (24 metrics)
+  categoryScores         Json?    @db.JsonB // 6 category scores (developer exp, culture, etc)
+  industryPercentile     Float?   // 0-100 percentile rank within industry
+  sizePercentile         Float?   // 0-100 percentile rank within size category
+  scoringMetadata        Json?    @db.JsonB // Scoring version, confidence, data sources
+  scoreStrengths         Json?    @db.JsonB // Top company strengths identified
+  scoreConcerns          Json?    @db.JsonB // Areas of concern identified
+  scoreRecommendations   Json?    @db.JsonB // Improvement recommendations
+  scoreCalculatedAt      DateTime? // When the comprehensive score was calculated
   
   // Detailed analysis fields (using JSONB for better performance)
   pros                   Json?    @db.JsonB // JSON array of positive aspects
@@ -116,6 +128,12 @@ model CompanyAnalysis {
   @@index([recommendationScore])
   @@index([cultureScore])
   @@index([confidenceScore])
+  // Modern scoring system indexes
+  @@index([overallScore])
+  @@index([industryPercentile])
+  @@index([sizePercentile])
+  @@index([scoreCalculatedAt])
+  @@index([overallScore, industryPercentile])
   @@map("company_analyses")
 }
 

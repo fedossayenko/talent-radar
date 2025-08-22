@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { CompanyProfileScraper } from './company-profile.scraper';
+import { DevBgCompanyExtractor } from './devbg-company-extractor.service';
 import axios from 'axios';
 
 // Mock axios
@@ -79,6 +80,77 @@ describe('CompanyProfileScraper', () => {
             }),
           },
         },
+        {
+          provide: DevBgCompanyExtractor,
+          useValue: {
+            extractCompanyData: jest.fn().mockImplementation(async (html: string) => {
+              // Parse company name from HTML to match test expectations
+              if (html.includes('Example Company')) {
+                return {
+                  name: 'Example Company',
+                  description: 'Leading software development company specializing in web applications.',
+                  industry: 'Technology',
+                  companySize: '100-500',
+                  website: 'https://example-company.com',
+                  locations: { headquarters: 'Sofia, Bulgaria', offices: ['Sofia, Bulgaria'] },
+                  employees: { bulgaria: 250, it: 200, global: 300 },
+                  technologies: ['JavaScript', 'TypeScript', 'React'],
+                  benefits: ['Health insurance', 'Remote work'],
+                  values: ['Innovation', 'Quality'],
+                  founded: 2015,
+                  logo: 'https://example-company.com/logo.png'
+                };
+              } else if (html.includes('Minimal Company')) {
+                return {
+                  name: 'Minimal Company',
+                  description: undefined,
+                  industry: undefined,
+                  companySize: undefined,
+                  website: undefined,
+                  locations: { headquarters: undefined, offices: [] },
+                  employees: { bulgaria: undefined, it: undefined, global: undefined },
+                  technologies: [],
+                  benefits: [],
+                  values: [],
+                  founded: undefined,
+                  logo: undefined
+                };
+              } else if (html === 'Invalid HTML response that is not valid HTML') {
+                // For invalid HTML, return empty structured data
+                return {
+                  name: '',
+                  description: undefined,
+                  industry: undefined,
+                  companySize: undefined,
+                  website: undefined,
+                  locations: { headquarters: undefined, offices: [] },
+                  employees: { bulgaria: undefined, it: undefined, global: undefined },
+                  technologies: [],
+                  benefits: [],
+                  values: [],
+                  founded: undefined,
+                  logo: undefined
+                };
+              }
+              
+              // Default mock data for other cases
+              return {
+                name: 'Mock Company',
+                description: 'Mock description',
+                industry: 'Technology',
+                companySize: '50-100',
+                website: 'https://mock-company.com',
+                locations: { headquarters: 'Sofia, Bulgaria', offices: ['Sofia'] },
+                employees: { bulgaria: 50, it: 45, global: 60 },
+                technologies: ['JavaScript', 'TypeScript'],
+                benefits: ['Health insurance', 'Remote work'],
+                values: ['Innovation', 'Quality'],
+                founded: 2020,
+                logo: 'https://mock-logo.com/logo.png'
+              };
+            })
+          }
+        }
       ],
     }).compile();
 

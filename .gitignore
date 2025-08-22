@@ -139,6 +139,9 @@ logs/
 *.sqlite3
 *.db-journal
 
+# Local database data (Docker bind mounts)
+local-data/
+
 # Redis
 dump.rdb
 *.rdb

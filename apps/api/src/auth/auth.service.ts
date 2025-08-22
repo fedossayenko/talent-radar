@@ -23,9 +23,16 @@ export class AuthService {
   }
 
   async validateUser(username: string, password: string): Promise<User | null> {
-    // For now, this is a simple hardcoded validation
+    // For now, this is a simple environment-based validation
     // In production, this would validate against a database with hashed passwords
-    if (username === 'admin' && password === 'admin_password_change_in_production') {
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    const userPassword = process.env.USER_PASSWORD;
+
+    if (!adminPassword || !userPassword) {
+      throw new Error('Authentication credentials not configured. Set ADMIN_PASSWORD and USER_PASSWORD environment variables.');
+    }
+
+    if (username === 'admin' && password === adminPassword) {
       return {
         id: '1',
         username: 'admin',
@@ -33,7 +40,7 @@ export class AuthService {
       };
     }
 
-    if (username === 'user' && password === 'user_password_change_in_production') {
+    if (username === 'user' && password === userPassword) {
       return {
         id: '2',
         username: 'user',

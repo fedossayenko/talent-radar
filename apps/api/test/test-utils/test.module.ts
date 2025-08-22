@@ -7,10 +7,18 @@ import { PrismaService } from '../../src/common/database/prisma.service';
 import { DatabaseHelper } from './database.helper';
 import { RedisMockService } from './redis-mock.service';
 
+// Import config files
+import { appConfig } from '../../src/config/app.config';
+import { databaseConfig } from '../../src/config/database.config';
+import { redisConfig } from '../../src/config/redis.config';
+import { aiConfig } from '../../src/config/ai.config';
+import scraperConfig from '../../src/config/scraper.config';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      load: [appConfig, databaseConfig, redisConfig, aiConfig, scraperConfig],
       envFilePath: ['.env.test', '.env'],
     }),
     DatabaseModule,
@@ -45,9 +53,19 @@ export class TestModule {
   }
 
   static async closeTestModule(moduleRef: TestingModule): Promise<void> {
-    const prismaService = moduleRef.get<PrismaService>(PrismaService);
-    await prismaService.$disconnect();
-    await moduleRef.close();
+    if (moduleRef) {
+      try {
+        const prismaService = moduleRef.get<PrismaService>(PrismaService);
+        if (prismaService) {
+          await prismaService.$disconnect();
+        }
+        await moduleRef.close();
+      } catch (error) {
+        // Ignore errors during cleanup
+        // eslint-disable-next-line no-console
+        console.warn('Error during test module cleanup:', error.message);
+      }
+    }
     await DatabaseHelper.closeDatabase();
   }
 }
