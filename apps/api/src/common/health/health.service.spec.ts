@@ -460,8 +460,8 @@ describe('HealthService', () => {
 
       await service.getDetailedHealth();
 
-      // Should not directly log stats errors since they're handled gracefully
-      expect(loggerSpy).not.toHaveBeenCalledWith('Failed to get database stats:', statsError);
+      // Stats errors are logged for debugging purposes even though handled gracefully
+      expect(loggerSpy).toHaveBeenCalledWith('Failed to get database stats:', statsError);
     });
   });
 

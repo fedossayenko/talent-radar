@@ -26,6 +26,7 @@ export class DatabaseHelper {
           stdio: 'inherit',
           timeout: 30000,
         });
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (_error) {
         // If migrations fail, try db push instead
         try {

@@ -730,6 +730,7 @@ export class AiService {
       const parsed = JSON.parse(text);
       this.logger.log(`Successfully parsed entire text as JSON`);
       return parsed;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_error) {
       this.logger.warn('Could not extract JSON from text response, using fallback parsing');
       

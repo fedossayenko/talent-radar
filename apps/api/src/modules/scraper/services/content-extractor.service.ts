@@ -434,6 +434,7 @@ export class ContentExtractorService {
       extractSpecificSections = true,
       optimizeForAI = true,
       maxTokens = 10000,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       preserveStructure: _preserveStructure = true,
     } = options;
 

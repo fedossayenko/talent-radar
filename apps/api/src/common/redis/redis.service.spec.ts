@@ -10,6 +10,7 @@ const MockedRedis = Redis as jest.MockedClass<typeof Redis>;
 
 describe('RedisService', () => {
   let service: RedisService;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   let _configService: jest.Mocked<ConfigService>;
   let mockClient: jest.Mocked<Redis>;
   let mockPublisher: jest.Mocked<Redis>;
@@ -593,9 +594,9 @@ describe('RedisService', () => {
     it('should handle serialization edge cases', async () => {
       mockClient.set.mockResolvedValue('OK');
 
-      // Test with undefined value
+      // Test with undefined value (JSON.stringify(undefined) returns undefined)
       await service.set('key1', undefined);
-      expect(mockClient.set).toHaveBeenCalledWith('key1', 'undefined');
+      expect(mockClient.set).toHaveBeenCalledWith('key1', undefined);
 
       // Test with null value
       await service.set('key2', null);

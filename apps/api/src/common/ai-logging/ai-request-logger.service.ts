@@ -180,6 +180,7 @@ export class AiRequestLoggerService {
       const fileName = this.getLogFileName(requestId);
       const content = await fs.readFile(fileName, 'utf8');
       return JSON.parse(content);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (_error) {
       return null;
     }
