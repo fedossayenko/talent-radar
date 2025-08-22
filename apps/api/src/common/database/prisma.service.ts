@@ -1,6 +1,23 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
+
+// Types for database statistics queries
+interface TableStatsRow {
+  schemaname: string;
+  tablename: string;
+  inserts: bigint;
+  updates: bigint;
+  deletes: bigint;
+  live_tuples: bigint;
+  dead_tuples: bigint;
+}
+
+interface ConnectionStatsRow {
+  total_connections: bigint;
+  active_connections: bigint;
+  idle_connections: bigint;
+}
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
@@ -71,7 +88,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         };
       }
 
-      const tables = await this.$queryRaw`
+      const tables = await this.$queryRaw<TableStatsRow[]>(Prisma.sql`
         SELECT 
           schemaname,
           relname as tablename,
@@ -82,15 +99,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           n_dead_tup as dead_tuples
         FROM pg_stat_user_tables
         ORDER BY n_live_tup DESC;
-      `;
+      `);
 
-      const connections = await this.$queryRaw`
+      const connections = await this.$queryRaw<ConnectionStatsRow[]>(Prisma.sql`
         SELECT 
           count(*) as total_connections,
           count(*) FILTER (WHERE state = 'active') as active_connections,
           count(*) FILTER (WHERE state = 'idle') as idle_connections
         FROM pg_stat_activity;
-      `;
+      `);
 
       // Convert BigInt values to strings for JSON serialization
       const sanitizedTables = tables.map(table => ({
