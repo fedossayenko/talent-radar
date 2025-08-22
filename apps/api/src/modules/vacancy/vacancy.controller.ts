@@ -1,12 +1,14 @@
 import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { VacancyService } from './vacancy.service';
+import { Public } from '../../auth/decorators/public.decorator';
 
 @ApiTags('vacancies')
 @Controller('vacancies')
 export class VacancyController {
   constructor(private readonly vacancyService: VacancyService) {}
 
+  @Public()
   @Get()
   @ApiOperation({ summary: 'List all vacancies with filtering and pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -24,6 +26,7 @@ export class VacancyController {
     return this.vacancyService.findAll(query);
   }
 
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get vacancy by ID' })
   @ApiResponse({ status: 200, description: 'Vacancy details' })

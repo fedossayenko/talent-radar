@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Logger, Query } from '@nestjs/common';
 import { ScraperScheduler } from './scraper.scheduler';
 import { ScraperService } from './scraper.service';
+import { Public } from '../../auth/decorators/public.decorator';
 
 // Controller for managing scraping operations
 
@@ -30,6 +31,7 @@ export class ScraperController {
     }
   }
 
+  @Public()
   @Post('dev-bg/test')
   async triggerTestScraping(@Query('limit') limit?: string) {
     const limitNum = limit ? parseInt(limit, 10) : 1;
@@ -52,6 +54,7 @@ export class ScraperController {
     }
   }
 
+  @Public()
   @Get('stats')
   async getScrapingStats() {
     this.logger.log('Fetching scraping statistics');

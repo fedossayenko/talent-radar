@@ -1,12 +1,14 @@
 import { Controller, Get, Post, Put, Body, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { CompanyService } from './company.service';
+import { Public } from '../../auth/decorators/public.decorator';
 
 @ApiTags('companies')
 @Controller('companies')
 export class CompanyController {
   constructor(private readonly companyService: CompanyService) {}
 
+  @Public()
   @Get()
   @ApiOperation({ summary: 'List all companies with filtering and pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number })
@@ -22,6 +24,7 @@ export class CompanyController {
     return this.companyService.findAll(query);
   }
 
+  @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Get company by ID' })
   @ApiResponse({ status: 200, description: 'Company details' })
@@ -45,6 +48,7 @@ export class CompanyController {
     return this.companyService.analyzeCompany(id, options.forceRefresh);
   }
 
+  @Public()
   @Get(':id/analysis')
   @ApiOperation({ summary: 'Get company analysis data' })
   @ApiResponse({ status: 200, description: 'Company analysis data' })
@@ -53,6 +57,7 @@ export class CompanyController {
     return this.companyService.getCompanyAnalysis(id);
   }
 
+  @Public()
   @Get(':id/analysis/latest')
   @ApiOperation({ summary: 'Get latest company analysis' })
   @ApiResponse({ status: 200, description: 'Latest company analysis data' })
@@ -61,6 +66,7 @@ export class CompanyController {
     return this.companyService.getLatestAnalysis(id);
   }
 
+  @Public()
   @Get(':id/insights')
   @ApiOperation({ summary: 'Get company insights and key metrics' })
   @ApiResponse({ status: 200, description: 'Company insights summary' })
@@ -69,6 +75,7 @@ export class CompanyController {
     return this.companyService.getCompanyInsights(id);
   }
 
+  @Public()
   @Get('top-rated')
   @ApiOperation({ summary: 'Get top-rated companies based on analysis scores' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of companies to return (default: 20)' })
