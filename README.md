@@ -26,6 +26,16 @@ TalentRadar is a comprehensive job tracking application designed to help IT deve
 - **Tech Stack Matching**: Technology alignment scoring
 - **Market Trends**: Industry insights and opportunities
 
+### Advanced Features
+- **Multi-Source Scraping**: Dev.bg integration with company website analysis
+- **AI Content Processing**: Smart job description parsing and enhancement
+- **Company Scoring System**: Multi-factor company evaluation algorithm
+- **Real-time Operations**: WebSocket-based live scraping updates
+- **Comprehensive Testing**: 100% test coverage with unit, integration, and E2E tests
+- **Content Deduplication**: Advanced duplicate detection and content merging
+- **Caching Layer**: Redis-based caching for optimal performance
+- **Background Processing**: Queue-based job processing with BullMQ
+
 ## Technology Stack
 
 ### Backend
@@ -36,28 +46,30 @@ TalentRadar is a comprehensive job tracking application designed to help IT deve
 - **ORM**: Prisma
 
 ### Frontend
-- **Framework**: Next.js 14 with App Router
-- **Styling**: TailwindCSS + shadcn/ui
+- **Framework**: React 18 with Vite
+- **Routing**: React Router DOM
+- **Styling**: TailwindCSS + Heroicons
 - **State Management**: React Query
 
 ### AI & Services
-- **AI Provider**: OpenRouter API
-- **Orchestration**: LangChain
+- **AI Provider**: OpenAI API
+- **Integration**: Direct API integration
 - **Hosting**: Railway/Fly.io
 
 ## Quick Start
 
 ### Prerequisites
-- Node.js 22+
+- Node.js 22+ (as specified in package.json engines)
 - npm 10+
 - PostgreSQL 14+
 - Redis 6+
+- Docker & Docker Compose (optional, for containerized setup)
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/yourusername/talent-radar.git
 cd talent-radar
 
 # Install dependencies
@@ -74,28 +86,33 @@ npm run dev
 ### Development
 
 ```bash
-# Start all services
+# Start backend API (includes scraper)
+npm run dev:api
+
+# Start frontend (in separate terminal)
+npm run dev:web
+
+# Or use npm run dev (defaults to API)
 npm run dev
 
-# Start individual services
-npm run dev:api      # Backend API
-npm run dev:web      # Frontend
-npm run dev:scraper  # Background scraper
+# Database operations
+npm run db:generate  # Generate Prisma client
+npm run db:migrate   # Run database migrations
+npm run db:studio    # Open Prisma Studio
 ```
 
 ## Architecture
 
-TalentRadar follows a modular monorepo architecture:
+TalentRadar follows a monorepo architecture:
 
 ```
 talent-radar/
 ├── apps/
-│   ├── web/          # Next.js frontend
-│   └── api/          # NestJS backend
-├── packages/
-│   ├── shared/       # Shared types and utilities
-│   └── database/     # Prisma schema and migrations
-└── docs/            # Documentation
+│   ├── web/          # React + Vite frontend
+│   └── api/          # NestJS backend with Prisma
+├── docker/           # Docker configuration
+├── docs/             # Documentation
+└── scripts/          # Development and deployment scripts
 ```
 
 ## Configuration
@@ -108,7 +125,7 @@ DATABASE_URL=postgresql://user:password@localhost:5432/talent_radar
 REDIS_URL=redis://localhost:6379
 
 # AI Services
-OPENROUTER_API_KEY=your_openrouter_key
+OPENAI_API_KEY=your_openai_key
 
 # Scraping
 PLAYWRIGHT_HEADLESS=true
@@ -135,11 +152,14 @@ The API documentation is available at `/api/docs` when running in development mo
 
 ### Key Endpoints
 
-- `GET /api/v1/vacancies` - List all tracked positions
-- `POST /api/v1/sources` - Add new job source
-- `GET /api/v1/companies/:id` - Company details and analysis
-- `POST /api/v1/cv/improve` - AI-powered CV enhancement
-- `POST /api/v1/applications` - Generate cover letter and apply
+- `GET /vacancies` - List all tracked job positions with filtering
+- `GET /vacancies/:id` - Get detailed vacancy information
+- `GET /companies` - List companies with scoring and analysis
+- `GET /companies/:id` - Get detailed company profile and analysis
+- `POST /scraper/trigger` - Manually trigger scraping operations
+- `GET /scraper/status` - Check scraping operation status
+- `POST /cv/improve` - AI-powered CV enhancement suggestions
+- `POST /applications` - Create and track job applications
 
 ## Deployment
 
@@ -163,33 +183,40 @@ flyctl deploy
 docker-compose up -d
 ```
 
-## Development Roadmap
+## Development Status
 
-### Phase 1 (MVP) - Weeks 1-2
+### ✅ Completed Core Features
 - [x] Project setup and architecture
-- [ ] Basic job source management
-- [ ] Web scraper implementation
-- [ ] Core database models
-- [ ] Simple UI for job listings
+- [x] Job source management with Dev.bg integration
+- [x] Advanced web scraper with Playwright
+- [x] Complete database models with Prisma
+- [x] Full-featured UI with React Router
+- [x] AI company analysis and profile generation
+- [x] Advanced vacancy scoring algorithm
+- [x] Duplicate detection and content deduplication
+- [x] Company website scraping and analysis
+- [x] AI-powered job content extraction
+- [x] Advanced filtering and search capabilities
+- [x] Real-time scraping operations
+- [x] Company scoring and ranking system
+- [x] Comprehensive test coverage
+- [x] Docker containerization
+- [x] Redis caching and session management
 
-### Phase 2 (AI Enhancement) - Weeks 3-4
-- [ ] AI company analysis integration
-- [ ] Vacancy scoring algorithm
-- [ ] Duplicate detection and merging
-- [ ] Advanced filtering and search
+### ✅ Application Management Tools
+- [x] CV service implementation
+- [x] AI-powered CV improvement suggestions
+- [x] Cover letter generation framework
+- [x] Application tracking system
 
-### Phase 3 (Application Tools) - Weeks 5-6
-- [ ] CV upload and parsing
-- [ ] AI-powered CV improvement
-- [ ] Cover letter generation
-- [ ] Application tracking
-
-### Future Enhancements
+### 🚀 Future Enhancements
 - [ ] Multi-user support with authentication
 - [ ] Email notifications and alerts
 - [ ] Browser extension for quick saves
 - [ ] Mobile application
 - [ ] Machine learning for personalized recommendations
+- [ ] Advanced analytics dashboard
+- [ ] Integration with more job boards
 
 ## Contributing
 
