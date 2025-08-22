@@ -10,6 +10,8 @@ import { CompanyService } from '../../company/company.service';
 import { CompanyValidationService } from '../services/company-validation.service';
 import { CompanySourceService } from '../../company/company-source.service';
 import { CompanyProfileScraper } from '../services/company-profile.scraper';
+import { CompanyScoringService } from '../../company/services/company-scoring.service';
+import { ScoringInput } from '../../company/interfaces/scoring.interface';
 
 export interface ScrapingJobData {
   source: string;
@@ -60,6 +62,7 @@ export class ScraperProcessor implements OnModuleInit {
     private readonly companySourceService: CompanySourceService,
     private readonly companyProfileScraper: CompanyProfileScraper,
     private readonly companyValidationService: CompanyValidationService,
+    private readonly companyScoringService: CompanyScoringService,
   ) {
     this.logger.log('ScraperProcessor initialized');
   }
@@ -432,9 +435,9 @@ export class ScraperProcessor implements OnModuleInit {
   }
 
   /**
-   * Save company analysis results to database
+   * Save company analysis results to database with enhanced scoring
    */
-  private async saveCompanyAnalysis(companyId: string, analysisResult: any, sourceSite: string): Promise<void> {
+  private async saveCompanyAnalysis(companyId: string, analysisResult: any, sourceSite: string, structuredData?: any): Promise<void> {
     try {
       // Update company with basic info if available
       if (analysisResult.name || analysisResult.description || analysisResult.industry) {
@@ -457,44 +460,130 @@ export class ScraperProcessor implements OnModuleInit {
         if (analysisResult.founded) companyUpdateData.founded = analysisResult.founded;
         if (analysisResult.employeeCount) companyUpdateData.employeeCount = analysisResult.employeeCount;
 
+        // Update last analysis timestamp
+        companyUpdateData.lastAnalyzedAt = new Date();
+
         // Only update if there's actual data to update
         if (Object.keys(companyUpdateData).length > 0) {
           await this.companyService.update(companyId, companyUpdateData);
         }
       }
 
-      // Create or update company analysis
+      // Calculate comprehensive scoring if structured data is available
+      let companyScore = null;
+      if (structuredData) {
+        try {
+          const scoringInput: ScoringInput = {
+            companyName: analysisResult.name || structuredData.name || 'Unknown',
+            industry: analysisResult.industry || structuredData.industry || 'Technology',
+            size: analysisResult.size || this.mapCompanySize(structuredData.companySize) || 'medium',
+            founded: analysisResult.founded || structuredData.founded,
+            employeeCount: analysisResult.employeeCount || this.getBestEmployeeCount(structuredData.employees),
+            technologies: structuredData.technologies || [],
+            benefits: structuredData.benefits || [],
+            values: structuredData.values || [],
+            awards: structuredData.awards || [],
+            workModel: structuredData.workModel,
+            jobOpenings: structuredData.jobOpenings || 0,
+            socialPresence: this.hasSocialPresence(structuredData.socialLinks),
+            websiteQuality: structuredData.website ? 7 : null, // Basic rating if website exists
+            glassdoorRating: null, // Not available yet
+            linkedinFollowers: null, // Not available yet
+            githubActivity: null, // Not available yet
+            dataCompleteness: structuredData.extractionMetadata?.dataCompleteness || 50,
+            sourceReliability: 85, // dev.bg is a reliable source
+          };
+
+          companyScore = await this.companyScoringService.calculateCompanyScore(scoringInput);
+          
+          this.logger.log(`Calculated comprehensive score for ${scoringInput.companyName}: ${companyScore.overallScore}/100`);
+        } catch (scoringError) {
+          this.logger.error(`Failed to calculate company score for ${companyId}:`, scoringError);
+          // Continue without score if scoring fails
+        }
+      }
+
+      // Create or update company analysis with enhanced data
       const analysisData = {
         companyId,
-        analysisSource: sourceSite,
-        recommendationScore: analysisResult.recommendationScore || null,
-        pros: analysisResult.pros ? JSON.stringify(analysisResult.pros) : null,
-        cons: analysisResult.cons ? JSON.stringify(analysisResult.cons) : null,
-        cultureScore: analysisResult.cultureScore || null,
-        workLifeBalance: analysisResult.workLifeBalance || null,
-        careerGrowth: analysisResult.careerGrowth || null,
-        salaryCompetitiveness: analysisResult.salaryCompetitiveness || null,
-        benefitsScore: analysisResult.benefitsScore || null,
-        techCulture: analysisResult.techCulture || null,
-        retentionRate: analysisResult.retentionRate || null,
+        sourceSite,
+        analysisSource: 'ai_generated',
+        
+        // Enhanced scoring data (if available)
+        recommendationScore: companyScore?.overallScore ? companyScore.overallScore / 10 : (analysisResult.recommendationScore || null),
+        cultureScore: companyScore?.categories.cultureAndValues || (analysisResult.cultureScore || null),
+        workLifeBalance: companyScore?.categories.workLifeBalance || (analysisResult.workLifeBalance || null),
+        careerGrowth: companyScore?.categories.growthOpportunities || (analysisResult.careerGrowth || null),
+        salaryCompetitiveness: companyScore?.categories.compensationBenefits || (analysisResult.salaryCompetitiveness || null),
+        benefitsScore: companyScore?.factors.benefitsQuality || (analysisResult.benefitsScore || null),
+        techCulture: companyScore?.categories.developerExperience || (analysisResult.techCulture || null),
+        retentionRate: companyScore?.factors.layoffRisk ? (companyScore.factors.layoffRisk * 10) : (analysisResult.retentionRate || null),
+        
+        // Analysis content
+        pros: analysisResult.pros ? JSON.stringify(analysisResult.pros) : (companyScore?.strengths ? JSON.stringify(companyScore.strengths) : null),
+        cons: analysisResult.cons ? JSON.stringify(analysisResult.cons) : (companyScore?.concerns ? JSON.stringify(companyScore.concerns) : null),
         workEnvironment: analysisResult.workEnvironment || null,
         interviewProcess: analysisResult.interviewProcess || null,
-        growthOpportunities: analysisResult.growthOpportunities ? JSON.stringify(analysisResult.growthOpportunities) : null,
-        benefits: analysisResult.benefits ? JSON.stringify(analysisResult.benefits) : null,
-        techStack: analysisResult.technologies ? JSON.stringify(analysisResult.technologies) : null,
-        companyValues: analysisResult.values ? JSON.stringify(analysisResult.values) : null,
-        confidenceScore: analysisResult.confidenceScore || 0,
-        rawData: JSON.stringify(analysisResult),
+        growthOpportunities: analysisResult.growthOpportunities ? JSON.stringify(analysisResult.growthOpportunities) : (companyScore?.recommendations ? JSON.stringify(companyScore.recommendations) : null),
+        benefits: analysisResult.benefits ? JSON.stringify(analysisResult.benefits) : (structuredData?.benefits ? JSON.stringify(structuredData.benefits) : null),
+        techStack: analysisResult.technologies ? JSON.stringify(analysisResult.technologies) : (structuredData?.technologies ? JSON.stringify(structuredData.technologies) : null),
+        companyValues: analysisResult.values ? JSON.stringify(analysisResult.values) : (structuredData?.values ? JSON.stringify(structuredData.values) : null),
+        
+        // Confidence and completeness
+        confidenceScore: companyScore?.scoringMetadata.confidenceLevel || analysisResult.confidenceScore || 0,
+        dataCompleteness: structuredData?.extractionMetadata?.dataCompleteness || analysisResult.dataCompleteness || null,
+        
+        // Raw data including structured information
+        rawData: JSON.stringify({
+          ...analysisResult,
+          companyScore: companyScore || null,
+          structuredData: structuredData || null,
+          enhancedAnalysis: !!companyScore,
+        }),
       };
 
       await this.companyService.createOrUpdateAnalysis(analysisData);
       
-      this.logger.log(`Saved company analysis for company ${companyId} from ${sourceSite}`);
+      this.logger.log(`Saved enhanced company analysis for company ${companyId} from ${sourceSite} ${companyScore ? `(score: ${companyScore.overallScore}/100)` : ''}`);
 
     } catch (error) {
       this.logger.error(`Failed to save company analysis for company ${companyId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Map company size from structured data format to standard format
+   */
+  private mapCompanySize(size?: string): string {
+    const sizeMap: Record<string, string> = {
+      'startup': 'startup',
+      'small': 'small',
+      'medium': 'medium',
+      'large': 'large',
+      'enterprise': 'enterprise',
+    };
+    
+    return sizeMap[size?.toLowerCase()] || 'medium';
+  }
+
+  /**
+   * Get best employee count from structured employee data
+   */
+  private getBestEmployeeCount(employees: any): number | null {
+    if (!employees) return null;
+    if (employees.bulgaria) return employees.bulgaria;
+    if (employees.it) return employees.it;
+    if (employees.global) return employees.global;
+    return null;
+  }
+
+  /**
+   * Check if company has social media presence
+   */
+  private hasSocialPresence(socialLinks: any): boolean {
+    if (!socialLinks) return false;
+    return !!(socialLinks.linkedin || socialLinks.facebook || socialLinks.twitter || socialLinks.github);
   }
 
 

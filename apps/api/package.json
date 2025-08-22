@@ -135,9 +135,6 @@
         "statements": 80
       }
     },
-    "testEnvironment": "node",
-    "setupFilesAfterEnv": [
-      "<rootDir>/test/test-utils/setup-e2e.ts"
-    ]
+    "testEnvironment": "node"
   }
 }

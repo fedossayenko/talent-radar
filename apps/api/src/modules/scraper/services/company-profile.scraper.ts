@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosResponse } from 'axios';
 import * as cheerio from 'cheerio';
+import { DevBgCompanyExtractor, DevBgCompanyData } from './devbg-company-extractor.service';
 
 export interface CompanyProfileData {
   name: string;
@@ -20,6 +21,9 @@ export interface CompanyProfileData {
   sourceUrl: string;
   sourceSite: string;
   scrapedAt: Date;
+  // Enhanced structured data
+  structuredData?: DevBgCompanyData;
+  tokenOptimized?: boolean; // Indicates if structured extraction was used
 }
 
 export interface CompanyScrapingResult {
@@ -38,14 +42,17 @@ export class CompanyProfileScraper {
   private readonly requestDelay: number;
   private readonly userAgent: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly devBgExtractor: DevBgCompanyExtractor
+  ) {
     this.requestTimeout = this.configService.get<number>('scraper.devBg.requestTimeout', 30000);
     this.requestDelay = this.configService.get<number>('scraper.devBg.requestDelay', 2000);
     this.userAgent = this.configService.get<string>('scraper.devBg.userAgent', 'TalentRadar/1.0 (Company Profile Scraper)');
   }
 
   /**
-   * Scrape company profile from dev.bg
+   * Scrape company profile from dev.bg using optimized structured extraction
    */
   async scrapeDevBgCompanyProfile(companyUrl: string): Promise<CompanyScrapingResult> {
     try {
@@ -60,7 +67,14 @@ export class CompanyProfileScraper {
         return { success: false, error: 'No content received' };
       }
 
-      const profileData = this.parseDevBgCompanyProfile(response.data, companyUrl);
+      // Use optimized structured extraction
+      const structuredData = await this.devBgExtractor.extractCompanyData(response.data, companyUrl);
+      
+      // Also use legacy parsing for fallback data
+      const legacyData = this.parseDevBgCompanyProfile(response.data, companyUrl);
+      
+      // Merge structured data with legacy data (structured takes precedence)
+      const profileData = this.mergeCompanyData(structuredData, legacyData);
       
       return {
         success: true,
@@ -70,6 +84,8 @@ export class CompanyProfileScraper {
           sourceUrl: companyUrl,
           sourceSite: 'dev.bg',
           scrapedAt: new Date(),
+          structuredData, // Include full structured data for AI processing
+          tokenOptimized: true, // Mark as using optimized extraction
         }
       };
 
@@ -410,6 +426,74 @@ export class CompanyProfileScraper {
       maxRedirects: 5,
     });
   }
+
+  /**
+   * Merge structured data with legacy data (structured takes precedence)
+   */
+  private mergeCompanyData(
+    structuredData: DevBgCompanyData, 
+    legacyData: Omit<CompanyProfileData, 'rawContent' | 'sourceUrl' | 'sourceSite' | 'scrapedAt' | 'structuredData' | 'tokenOptimized'>
+  ): Omit<CompanyProfileData, 'rawContent' | 'sourceUrl' | 'sourceSite' | 'scrapedAt' | 'structuredData' | 'tokenOptimized'> {
+    
+    return {
+      // Basic information - prefer structured data
+      name: structuredData.name || legacyData.name,
+      description: structuredData.description || legacyData.description,
+      website: structuredData.website || legacyData.website,
+      industry: structuredData.industry || legacyData.industry,
+      size: this.normalizeCompanySize(structuredData.companySize) || legacyData.size,
+      location: this.getBestLocation(structuredData.locations, legacyData.location),
+      founded: structuredData.founded || legacyData.founded,
+      employeeCount: this.getBestEmployeeCount(structuredData.employees) || legacyData.employeeCount,
+      logo: structuredData.logo || legacyData.logo,
+      
+      // Arrays - merge and deduplicate
+      benefits: this.mergeArrays(structuredData.benefits, legacyData.benefits),
+      technologies: this.mergeArrays(structuredData.technologies, legacyData.technologies),
+      values: this.mergeArrays(structuredData.values, legacyData.values),
+    };
+  }
+
+  /**
+   * Get the best location from structured data
+   */
+  private getBestLocation(
+    locations: DevBgCompanyData['locations'], 
+    legacyLocation?: string
+  ): string | undefined {
+    if (locations.headquarters) return locations.headquarters;
+    if (locations.offices.length > 0) return locations.offices[0];
+    return legacyLocation;
+  }
+
+  /**
+   * Get the best employee count from structured employee data
+   */
+  private getBestEmployeeCount(employees: DevBgCompanyData['employees']): number | undefined {
+    // Prefer Bulgaria count for local relevance, then IT count, then global
+    if (employees.bulgaria) return employees.bulgaria;
+    if (employees.it) return employees.it;
+    if (employees.global) return employees.global;
+    return undefined;
+  }
+
+  /**
+   * Merge arrays and remove duplicates
+   */
+  private mergeArrays(arr1?: string[], arr2?: string[]): string[] | undefined {
+    const combined = [...(arr1 || []), ...(arr2 || [])];
+    if (combined.length === 0) return undefined;
+    
+    // Remove duplicates (case-insensitive)
+    const unique = combined.filter((item, index) => {
+      return combined.findIndex(other => 
+        other.toLowerCase() === item.toLowerCase()
+      ) === index;
+    });
+    
+    return unique.length > 0 ? unique : undefined;
+  }
+
 
   /**
    * Add delay between requests to be respectful
