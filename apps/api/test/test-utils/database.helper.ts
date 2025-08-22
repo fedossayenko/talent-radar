@@ -26,7 +26,7 @@ export class DatabaseHelper {
           stdio: 'inherit',
           timeout: 30000,
         });
-      } catch (error) {
+      } catch (_error) {
         // If migrations fail, try db push instead
         try {
           execSync(`DATABASE_URL="${databaseUrl}" npx prisma db push --force-reset --skip-generate`, {

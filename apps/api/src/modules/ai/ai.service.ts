@@ -675,11 +675,9 @@ export class AiService {
       this.logger.log(`Raw AI response: ${response?.substring(0, 500)}...`);
       this.logger.log(`Is unstructured model: ${isUnstructuredModel}`);
       
-      let parsed: any;
-      
       // GPT-5 Nano produces valid JSON, just doesn't support response_format parameter
       // All models should use standard JSON parsing
-      parsed = JSON.parse(response);
+      const parsed = JSON.parse(response);
       
       if (!parsed) {
         this.logger.log('Failed to extract structured data from response');
@@ -732,7 +730,7 @@ export class AiService {
       const parsed = JSON.parse(text);
       this.logger.log(`Successfully parsed entire text as JSON`);
       return parsed;
-    } catch (error) {
+    } catch (_error) {
       this.logger.warn('Could not extract JSON from text response, using fallback parsing');
       
       // Fallback: create a basic structure if the model provided readable text
@@ -760,15 +758,13 @@ export class AiService {
   /**
    * Parse company analysis response (handles different analysis types)
    */
-  private parseCompanyAnalysisResponse(response: string | undefined, isUnstructuredModel: boolean = false, analysisType: 'profile' | 'website' | 'consolidated' = 'profile'): any | null {
+  private parseCompanyAnalysisResponse(response: string | undefined, _isUnstructuredModel: boolean = false, analysisType: 'profile' | 'website' | 'consolidated' = 'profile'): any | null {
     if (!response) return null;
 
     try {
-      let parsed: any;
-      
       // GPT-5 Nano produces valid JSON, just doesn't support response_format parameter
       // All models should use standard JSON parsing
-      parsed = JSON.parse(response);
+      const parsed = JSON.parse(response);
       
       if (!parsed) {
         this.logger.warn(`Failed to extract structured data from company ${analysisType} analysis response`);

@@ -434,7 +434,7 @@ export class ContentExtractorService {
       extractSpecificSections = true,
       optimizeForAI = true,
       maxTokens = 10000,
-      preserveStructure = true,
+      preserveStructure: _preserveStructure = true,
     } = options;
 
     this.logger.debug(`Preprocessing HTML for AI extraction from ${sourceUrl}`, {

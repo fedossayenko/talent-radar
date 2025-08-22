@@ -180,7 +180,7 @@ export class AiRequestLoggerService {
       const fileName = this.getLogFileName(requestId);
       const content = await fs.readFile(fileName, 'utf8');
       return JSON.parse(content);
-    } catch (error) {
+    } catch (_error) {
       return null;
     }
   }

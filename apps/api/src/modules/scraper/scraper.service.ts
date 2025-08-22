@@ -61,7 +61,8 @@ export class ScraperService {
   }
 
   async scrapeDevBg(options: ScrapingOptions = {}): Promise<ScrapingResult> {
-    let { limit, enableAiExtraction = true, enableCompanyAnalysis = true } = options;
+    let { limit } = options;
+    const { enableAiExtraction = true, enableCompanyAnalysis = true } = options;
     
     // If no explicit limit is provided, use the configured maxVacancies
     if (!limit) {
