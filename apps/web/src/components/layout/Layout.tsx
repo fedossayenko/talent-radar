@@ -28,6 +28,12 @@ export default function Layout({ children }: LayoutProps) {
                 Vacancies
               </Link>
               <Link
+                to="/companies"
+                className="text-gray-900 hover:text-gray-700 px-3 py-2 text-sm font-medium"
+              >
+                Companies
+              </Link>
+              <Link
                 to="/admin"
                 className="text-gray-900 hover:text-gray-700 px-3 py-2 text-sm font-medium"
               >

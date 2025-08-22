@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { ParsedVacancy } from '@/types/vacancy'
 import { 
   getWorkModelClasses, 
@@ -25,7 +26,11 @@ export default function VacancyCard({ vacancy, onClick }: VacancyCardProps) {
         <h3 className="vacancy-title">
           {truncateText(vacancy.title, 60)}
         </h3>
-        <div className="company-info">
+        <Link 
+          to={`/companies/${vacancy.company.id}`}
+          className="company-info hover:text-blue-600 transition-colors"
+          onClick={(e) => e.stopPropagation()} // Prevent triggering parent vacancy click
+        >
           {/* Company Logo or Initials */}
           <div className="flex-shrink-0">
             {vacancy.company.logo ? (
@@ -56,7 +61,7 @@ export default function VacancyCard({ vacancy, onClick }: VacancyCardProps) {
           <span className="company-name">
             {truncateText(vacancy.company.name, 30)}
           </span>
-        </div>
+        </Link>
       </div>
 
       {/* Location and Work Model */}

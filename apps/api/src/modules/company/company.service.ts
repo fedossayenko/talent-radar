@@ -9,8 +9,8 @@ export class CompanyService {
 
   async findAll(query: any) {
     const {
-      page = 1,
-      limit = 20,
+      page: pageParam = 1,
+      limit: limitParam = 20,
       search,
       industry,
       size,
@@ -18,6 +18,10 @@ export class CompanyService {
       sortOrder,
       hasAnalysis,
     } = query;
+
+    // Convert string parameters to numbers
+    const page = parseInt(pageParam.toString(), 10) || 1;
+    const limit = parseInt(limitParam.toString(), 10) || 20;
 
     this.logger.log(`Finding companies with filters: ${JSON.stringify(query)}`);
 
@@ -270,8 +274,8 @@ export class CompanyService {
     }
   }
 
-  async analyzeCompany(id: string, forceRefresh = false) {
-    this.logger.log(`Analyzing company ${id}, forceRefresh: ${forceRefresh}`);
+  async analyzeCompany(id: string, forceRefresh = false, force = false) {
+    this.logger.log(`Analyzing company ${id}, forceRefresh: ${forceRefresh}, force: ${force}`);
 
     try {
       const company = await this.prisma.company.findUnique({
@@ -711,6 +715,8 @@ export class CompanyService {
   }
 
   private getScoreByMetric(scores: any, metric: string): number | null {
+    if (!scores) return null;
+    
     const scoreMap: Record<string, string> = {
       overall: 'overall',
       culture: 'culture',
@@ -719,7 +725,7 @@ export class CompanyService {
       tech: 'techCulture',
     };
     const scoreKey = scoreMap[metric] || 'overall';
-    return scores[scoreKey];
+    return scores[scoreKey] || null;
   }
 
   private getRecommendationLevel(recommendationScore: number | null): string {
