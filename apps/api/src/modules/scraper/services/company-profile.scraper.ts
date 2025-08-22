@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosResponse } from 'axios';
 import * as cheerio from 'cheerio';
+import { chromium, Browser, Page } from 'playwright';
 import { DevBgCompanyExtractor, DevBgCompanyData } from './devbg-company-extractor.service';
 
 export interface CompanyProfileData {
@@ -106,18 +107,37 @@ export class CompanyProfileScraper {
         return { success: false, error: 'Invalid URL format' };
       }
 
-      const response = await this.fetchPage(websiteUrl);
-      if (!response.data) {
-        return { success: false, error: 'No content received' };
+      // First try HTTP request
+      let response: AxiosResponse<string> | null = null;
+      let htmlContent: string | null = null;
+
+      try {
+        response = await this.fetchPage(websiteUrl);
+        if (response.data) {
+          htmlContent = response.data;
+          
+          // Check if response contains only JavaScript (likely SPA)
+          if (this.isJavaScriptOnlyContent(htmlContent)) {
+            this.logger.log(`Website appears to be SPA, falling back to browser automation: ${websiteUrl}`);
+            htmlContent = await this.fetchPageWithBrowser(websiteUrl);
+          }
+        }
+      } catch (error) {
+        this.logger.warn(`HTTP request failed, trying browser automation: ${error.message}`);
+        htmlContent = await this.fetchPageWithBrowser(websiteUrl);
       }
 
-      const websiteData = this.parseCompanyWebsite(response.data, websiteUrl);
+      if (!htmlContent) {
+        return { success: false, error: 'No content received from HTTP or browser methods' };
+      }
+
+      const websiteData = this.parseCompanyWebsite(htmlContent, websiteUrl);
       
       return {
         success: true,
         data: {
           ...websiteData,
-          rawContent: response.data,
+          rawContent: htmlContent,
           sourceUrl: websiteUrl,
           sourceSite: 'company_website',
           scrapedAt: new Date(),
@@ -494,6 +514,73 @@ export class CompanyProfileScraper {
     return unique.length > 0 ? unique : undefined;
   }
 
+
+  /**
+   * Check if content contains only JavaScript code (indicating SPA)
+   */
+  private isJavaScriptOnlyContent(content: string): boolean {
+    const $ = cheerio.load(content);
+    
+    // Remove script tags and check remaining text content
+    $('script, noscript, style').remove();
+    const textContent = $('body').text().trim();
+    
+    // If there's very little text content but lots of scripts, likely SPA
+    const scriptTags = $('script').length;
+    const hasMinimalContent = textContent.length < 500;
+    const hasLotsOfScripts = scriptTags > 5;
+    
+    return hasMinimalContent && hasLotsOfScripts;
+  }
+
+  /**
+   * Fetch page content using browser automation (Playwright)
+   */
+  private async fetchPageWithBrowser(url: string): Promise<string | null> {
+    let browser: Browser | null = null;
+    let page: Page | null = null;
+
+    try {
+      this.logger.log(`Using browser automation to fetch: ${url}`);
+      
+      browser = await chromium.launch({ 
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      
+      page = await browser.newPage();
+      
+      // Set reasonable timeouts
+      page.setDefaultTimeout(30000);
+      page.setDefaultNavigationTimeout(30000);
+      
+      // Navigate to the page
+      await page.goto(url, { 
+        waitUntil: 'networkidle',
+        timeout: 30000 
+      });
+      
+      // Wait a bit for any dynamic content to load
+      await page.waitForTimeout(2000);
+      
+      // Get the page content
+      const content = await page.content();
+      
+      this.logger.log(`Successfully fetched ${content.length} characters using browser automation`);
+      return content;
+      
+    } catch (error) {
+      this.logger.error(`Browser automation failed for ${url}:`, error.message);
+      return null;
+    } finally {
+      if (page) {
+        try { await page.close(); } catch { /* ignore */ }
+      }
+      if (browser) {
+        try { await browser.close(); } catch { /* ignore */ }
+      }
+    }
+  }
 
   /**
    * Add delay between requests to be respectful

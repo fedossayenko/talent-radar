@@ -43,9 +43,14 @@ export class CompanyController {
 
   @Post(':id/analyze')
   @ApiOperation({ summary: 'Analyze company with AI' })
+  @ApiQuery({ name: 'force', required: false, type: Boolean, description: 'Force re-scraping bypassing TTL cache' })
   @ApiResponse({ status: 200, description: 'Company analysis completed' })
-  async analyzeCompany(@Param('id') id: string, @Body() options: { forceRefresh?: boolean }) {
-    return this.companyService.analyzeCompany(id, options.forceRefresh);
+  async analyzeCompany(
+    @Param('id') id: string, 
+    @Query('force') force?: boolean,
+    @Body() options: { forceRefresh?: boolean } = {}
+  ) {
+    return this.companyService.analyzeCompany(id, options.forceRefresh, force);
   }
 
   @Public()

@@ -45,7 +45,8 @@ export class CompanySourceService {
   async shouldScrapeCompanySource(
     companyId: string, 
     sourceSite: string, 
-    sourceUrl: string
+    sourceUrl: string,
+    force = false
   ): Promise<CacheCheckResult> {
     try {
       const existingSource = await this.prisma.companySource.findUnique({
@@ -61,6 +62,15 @@ export class CompanySourceService {
         return {
           shouldScrape: true,
           reason: 'No existing source found',
+        };
+      }
+
+      // If force flag is enabled, bypass all TTL checks
+      if (force) {
+        return {
+          shouldScrape: true,
+          existingSource,
+          reason: 'Force flag enabled - bypassing TTL',
         };
       }
 

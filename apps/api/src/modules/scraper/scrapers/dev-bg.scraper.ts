@@ -115,7 +115,7 @@ export class DevBgScraper {
     return allJobs;
   }
 
-  async fetchJobDetails(jobUrl: string): Promise<{ 
+  async fetchJobDetails(jobUrl: string, companyName?: string): Promise<{ 
     description: string; 
     requirements: string; 
     rawHtml?: string;
@@ -131,7 +131,7 @@ export class DevBgScraper {
       });
 
       const jobDetails = this.jobParserService.parseJobDetailsFromHtml(response.data);
-      const companyUrls = this.jobParserService.extractCompanyUrls(response.data);
+      const companyUrls = this.jobParserService.extractCompanyUrls(response.data, companyName);
       
       return {
         description: this.translationService.translateJobTerms(jobDetails.description),
