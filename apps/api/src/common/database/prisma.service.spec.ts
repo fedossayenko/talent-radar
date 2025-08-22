@@ -28,8 +28,14 @@ jest.mock('@prisma/client', () => {
     }
   }
   
+  // Mock Prisma namespace with sql template function
+  const Prisma = {
+    sql: jest.fn((strings, ...values) => ({ strings, values })),
+  };
+  
   return {
     PrismaClient: MockPrismaClient,
+    Prisma,
   };
 });
 
@@ -211,8 +217,20 @@ describe('PrismaService', () => {
         const result = await service.getStats();
 
         expect(result).toMatchObject({
-          tables: mockTables,
-          connections: mockConnections[0],
+          tables: [{
+            schemaname: 'public',
+            tablename: 'users',
+            inserts: '100',
+            updates: '50',
+            deletes: '10',
+            live_tuples: '90',
+            dead_tuples: '5',
+          }],
+          connections: {
+            total_connections: '10',
+            active_connections: '3',
+            idle_connections: '7',
+          },
           timestamp: expect.any(String),
         });
 
@@ -362,7 +380,11 @@ describe('PrismaService', () => {
 
       // When no DATABASE_URL, returns results from PostgreSQL queries with mocked data
       expect(result.tables).toEqual([]);
-      expect(result.connections).toEqual({ total_connections: 0, active_connections: 0, idle_connections: 0 });
+      expect(result.connections).toEqual({ 
+        total_connections: '0', 
+        active_connections: '0', 
+        idle_connections: '0' 
+      });
       expect(result.timestamp).toBeDefined();
       
       process.env.DATABASE_URL = originalEnv;
@@ -379,16 +401,20 @@ describe('PrismaService', () => {
 
       await service.getStats().catch(() => {}); // Ignore result
 
-      // Prisma $queryRaw with template literals receives an array
+      // Prisma $queryRaw with Prisma.sql receives objects with strings and values
       const firstCall = mockPrismaClient.$queryRaw.mock.calls[0];
       const secondCall = mockPrismaClient.$queryRaw.mock.calls[1];
       
-      expect(firstCall[0]).toEqual(expect.arrayContaining([
-        expect.stringContaining('pg_stat_user_tables')
-      ]));
-      expect(secondCall[0]).toEqual(expect.arrayContaining([
-        expect.stringContaining('pg_stat_activity')
-      ]));
+      expect(firstCall[0]).toEqual(expect.objectContaining({
+        strings: expect.arrayContaining([
+          expect.stringContaining('pg_stat_user_tables')
+        ])
+      }));
+      expect(secondCall[0]).toEqual(expect.objectContaining({
+        strings: expect.arrayContaining([
+          expect.stringContaining('pg_stat_activity')
+        ])
+      }));
     });
 
     it('should order tables by live tuples', async () => {
@@ -397,9 +423,11 @@ describe('PrismaService', () => {
       await service.getStats().catch(() => {}); // Ignore result
 
       const firstCall = mockPrismaClient.$queryRaw.mock.calls[0];
-      expect(firstCall[0]).toEqual(expect.arrayContaining([
-        expect.stringContaining('ORDER BY n_live_tup DESC')
-      ]));
+      expect(firstCall[0]).toEqual(expect.objectContaining({
+        strings: expect.arrayContaining([
+          expect.stringContaining('ORDER BY n_live_tup DESC')
+        ])
+      }));
     });
 
     it('should filter connections by state', async () => {
@@ -408,12 +436,16 @@ describe('PrismaService', () => {
       await service.getStats().catch(() => {}); // Ignore result
 
       const secondCall = mockPrismaClient.$queryRaw.mock.calls[1];
-      expect(secondCall[0]).toEqual(expect.arrayContaining([
-        expect.stringContaining("FILTER (WHERE state = 'active')")
-      ]));
-      expect(secondCall[0]).toEqual(expect.arrayContaining([
-        expect.stringContaining("FILTER (WHERE state = 'idle')")
-      ]));
+      expect(secondCall[0]).toEqual(expect.objectContaining({
+        strings: expect.arrayContaining([
+          expect.stringContaining("FILTER (WHERE state = 'active')")
+        ])
+      }));
+      expect(secondCall[0]).toEqual(expect.objectContaining({
+        strings: expect.arrayContaining([
+          expect.stringContaining("FILTER (WHERE state = 'idle')")
+        ])
+      }));
     });
   });
 
@@ -528,7 +560,16 @@ describe('PrismaService', () => {
         
         // Reset mocks before each test to avoid interference
         mockPrismaClient.$queryRaw.mockClear();
-        mockPrismaClient.$queryRaw.mockResolvedValue([]);
+        if (!isSqlite) {
+          // For non-SQLite databases, provide mock data for both queries
+          mockPrismaClient.$queryRaw
+            .mockResolvedValueOnce([]) // tables query
+            .mockResolvedValueOnce([{ // connections query
+              total_connections: 1,
+              active_connections: 1,
+              idle_connections: 0,
+            }]);
+        }
 
         const result = await service.getStats();
 
