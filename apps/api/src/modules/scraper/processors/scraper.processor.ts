@@ -7,6 +7,7 @@ import { AiService, VacancyExtractionResult } from '../../ai/ai.service';
 import { AiProcessingPipelineService, PipelineResult } from '../services/ai-processing-pipeline.service';
 import { VacancyService } from '../../vacancy/vacancy.service';
 import { CompanyService } from '../../company/company.service';
+import { CompanyValidationService } from '../services/company-validation.service';
 import { CompanySourceService } from '../../company/company-source.service';
 import { CompanyProfileScraper } from '../services/company-profile.scraper';
 
@@ -58,6 +59,7 @@ export class ScraperProcessor implements OnModuleInit {
     private readonly companyService: CompanyService,
     private readonly companySourceService: CompanySourceService,
     private readonly companyProfileScraper: CompanyProfileScraper,
+    private readonly companyValidationService: CompanyValidationService,
   ) {
     this.logger.log('ScraperProcessor initialized');
   }
@@ -438,7 +440,15 @@ export class ScraperProcessor implements OnModuleInit {
       if (analysisResult.name || analysisResult.description || analysisResult.industry) {
         const companyUpdateData: any = {};
         
-        if (analysisResult.name) companyUpdateData.name = analysisResult.name;
+        // Get existing company to validate before overwriting
+        const existingCompanyResult = await this.companyService.findOne(companyId);
+        const existingCompany = existingCompanyResult?.data;
+        
+        // Only update company name if it's empty or if the new name is not a job board name
+        if (analysisResult.name && this.companyValidationService.shouldUpdateCompanyName(existingCompany?.name, analysisResult.name)) {
+          companyUpdateData.name = analysisResult.name;
+        }
+        
         if (analysisResult.description) companyUpdateData.description = analysisResult.description;
         if (analysisResult.industry) companyUpdateData.industry = analysisResult.industry;
         if (analysisResult.location) companyUpdateData.location = analysisResult.location;
@@ -447,7 +457,10 @@ export class ScraperProcessor implements OnModuleInit {
         if (analysisResult.founded) companyUpdateData.founded = analysisResult.founded;
         if (analysisResult.employeeCount) companyUpdateData.employeeCount = analysisResult.employeeCount;
 
-        await this.companyService.update(companyId, companyUpdateData);
+        // Only update if there's actual data to update
+        if (Object.keys(companyUpdateData).length > 0) {
+          await this.companyService.update(companyId, companyUpdateData);
+        }
       }
 
       // Create or update company analysis
@@ -483,6 +496,7 @@ export class ScraperProcessor implements OnModuleInit {
       throw error;
     }
   }
+
 
   /**
    * Update vacancy with AI-extracted data (legacy method for compatibility)

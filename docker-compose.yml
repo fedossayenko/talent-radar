@@ -10,7 +10,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ./local-data/postgres:/var/lib/postgresql/data
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
       - talent-radar-network
@@ -29,7 +29,7 @@ services:
     # ports:
     #   - "6379:6379"
     volumes:
-      - redis_data:/data
+      - ./local-data/redis:/data
       - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${REDIS_PASSWORD:-dev_redis_password_change_in_production}"]
     networks:
@@ -165,11 +165,6 @@ services:
       - tools
 
 
-volumes:
-  postgres_data:
-    name: talent-radar-postgres-data
-  redis_data:
-    name: talent-radar-redis-data
 
 networks:
   talent-radar-network:

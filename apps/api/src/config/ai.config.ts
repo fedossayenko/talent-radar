@@ -86,8 +86,10 @@ RESPOND ONLY WITH VALID JSON. No explanations.`,
 
 Source URL: {sourceUrl}
 
+IMPORTANT: Do NOT extract job board names as company names. If this appears to be a job board page (like DEV.BG, Indeed, LinkedIn) rather than a specific company profile, return null for the name field.
+
 Return JSON with ALL these fields (use null for missing values):
-- name: string
+- name: string (MUST be the actual company name, NOT the job board name like DEV.BG)
 - description: string (clean summary of what the company does)
 - industry: string
 - size: string (1-10/11-50/51-200/201-500/501-1000/1000+)
@@ -117,8 +119,10 @@ RESPOND ONLY WITH VALID JSON. No explanations.`,
 
 Source URL: {sourceUrl}
 
+IMPORTANT: Do NOT extract job board names as company names. If this appears to be a job board, job aggregator, or recruitment site page (like JobBoardFinder, Indeed, DEV.BG listing pages) rather than an actual company website, return null for the name field.
+
 Return JSON with ALL these fields (use null for missing values):
-- name: string
+- name: string (MUST be the actual company name, NOT job board or aggregator names)
 - description: string (what the company does - from about/mission sections)
 - industry: string
 - location: string (headquarters/main office)
@@ -149,8 +153,10 @@ COMPANY WEBSITE DATA:
 
 Company Name: {companyName}
 
+IMPORTANT: Use the provided Company Name parameter as the authoritative company name. Do NOT use job board names (like DEV.BG, Indeed, etc.) as the company name.
+
 Create a comprehensive analysis by merging information from all sources. Return JSON with ALL these fields:
-- name: string
+- name: string (use the provided Company Name parameter, NOT job board names)
 - description: string (comprehensive description combining all sources)
 - industry: string
 - size: string (1-10/11-50/51-200/201-500/501-1000/1000+)

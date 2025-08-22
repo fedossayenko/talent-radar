@@ -145,12 +145,16 @@ export class JobParserService {
       // These are typically found in company name links or dedicated company sections
       let profileUrl: string | undefined;
       
-      // Check for company profile links (usually /company/ URLs)
+      // Check for company profile links (usually /company/ URLs with specific company name)
       const companyLinks = $('a[href*="/company/"]');
       companyLinks.each((_, element) => {
         const href = $(element).attr('href');
         if (href && href.includes('/company/') && !profileUrl) {
-          profileUrl = href.startsWith('http') ? href : `https://dev.bg${href}`;
+          // Only accept company URLs with specific company identifiers (not generic /company/)
+          const companyUrlPattern = /\/company\/[a-zA-Z0-9\-_]+/;
+          if (companyUrlPattern.test(href) && !href.endsWith('/company/')) {
+            profileUrl = href.startsWith('http') ? href : `https://dev.bg${href}`;
+          }
         }
       });
       
@@ -174,13 +178,16 @@ export class JobParserService {
           const href = $(element).attr('href');
           const linkText = $(element).text().toLowerCase();
           
-          // Skip dev.bg URLs and social media/job boards
+          // Skip dev.bg URLs, social media, and job board aggregators
           if (href && 
               !href.includes('dev.bg') && 
               !href.includes('linkedin.com') &&
               !href.includes('facebook.com') &&
               !href.includes('twitter.com') &&
               !href.includes('jobs.bg') &&
+              !href.includes('jobboardfinder.com') &&
+              !href.includes('indeed.com') &&
+              !href.includes('glassdoor.com') &&
               !website) {
             
             // Prefer links that look like company websites
@@ -204,6 +211,9 @@ export class JobParserService {
             if (!url.includes('dev.bg') && 
                 !url.includes('linkedin.com') &&
                 !url.includes('facebook.com') &&
+                !url.includes('jobboardfinder.com') &&
+                !url.includes('indeed.com') &&
+                !url.includes('glassdoor.com') &&
                 url.match(/\.(com|bg|org|net|io|eu)/)) {
               website = url;
               break;
