@@ -52,6 +52,7 @@ describe('PrismaService', () => {
     loggerSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation();
     jest.spyOn(Logger.prototype, 'error').mockImplementation();
     jest.spyOn(Logger.prototype, 'debug').mockImplementation();
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation();
 
     // Mock ConfigService
     const mockConfigService = {
@@ -457,14 +458,17 @@ describe('PrismaService', () => {
 
     it('should handle executeRaw with SQL injection attempt', async () => {
       const maliciousSQL = "SELECT * FROM users; DROP TABLE users; --";
-      const error = new Error('Malicious query blocked');
-      mockPrismaClient.$queryRawUnsafe.mockRejectedValue(error);
 
+      // The new implementation detects and blocks malicious queries before database access
       await expect(service.executeRaw(maliciousSQL)).rejects.toThrow('Malicious query blocked');
-      expect(Logger.prototype.error).toHaveBeenCalledWith(
-        expect.stringContaining('Raw SQL execution failed'),
-        error
+      
+      // Verify the warning was logged about the blocked query
+      expect(Logger.prototype.warn).toHaveBeenCalledWith(
+        expect.stringContaining('Potentially malicious SQL query blocked'),
       );
+      
+      // Database should not have been called due to early detection
+      expect(mockPrismaClient.$queryRawUnsafe).not.toHaveBeenCalled();
     });
   });
 

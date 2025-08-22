@@ -1,8 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
+import { APP_GUARD } from '@nestjs/core';
+
+// Authentication
+import { AuthModule } from './auth/auth.module';
+import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 
 // Feature modules
 import { VacancyModule } from './modules/vacancy/vacancy.module';
@@ -83,6 +88,9 @@ import { MetricsModule } from './common/metrics/metrics.module';
     DatabaseModule,
     RedisModule,
 
+    // Authentication
+    AuthModule,
+
     // Health and monitoring
     HealthModule,
     MetricsModule,
@@ -97,6 +105,17 @@ import { MetricsModule } from './common/metrics/metrics.module';
     ApplicationModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    // Global authentication guard
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    // Global rate limiting guard
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
 })
 export class AppModule {}

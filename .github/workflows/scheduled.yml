@@ -1,5 +1,10 @@
 name: Scheduled Maintenance
 
+permissions:
+  contents: read
+  security-events: write
+  issues: write
+
 on:
   schedule:
     # Daily security scan at 2 AM UTC

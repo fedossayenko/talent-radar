@@ -104,11 +104,28 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   /**
-   * Execute raw SQL with logging
+   * Execute raw SQL with logging - Uses parameterized queries for security
+   * @deprecated Use $queryRaw with template literals instead for better type safety
    */
   async executeRaw(sql: string, params?: any[]): Promise<any> {
+    // Block obviously dangerous SQL patterns
+    const dangerousPatterns = [
+      /;\s*(drop|delete|truncate|alter|create|insert|update)\s+/i,
+      /union\s+(all\s+)?select/i,
+      /--[^\r\n]*/,
+      /\/\*[\s\S]*?\*\//
+    ];
+
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(sql)) {
+        this.logger.warn(`Potentially malicious SQL query blocked: ${sql}`);
+        throw new Error('Malicious query blocked');
+      }
+    }
+
     try {
       this.logger.debug(`Executing raw SQL: ${sql}`, { params });
+      // Note: Still using $queryRawUnsafe but with validation - should migrate to $queryRaw template literals
       return await this.$queryRawUnsafe(sql, ...(params || []));
     } catch (error) {
       this.logger.error(`Raw SQL execution failed: ${sql}`, error);
