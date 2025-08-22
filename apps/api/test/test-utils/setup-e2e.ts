@@ -7,6 +7,11 @@ beforeAll(async () => {
   process.env.DATABASE_URL = process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/talent_radar_test';
   process.env.REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
   
+  // Authentication configuration for tests
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-for-e2e-tests-only';
+  process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'test_admin_password';
+  process.env.USER_PASSWORD = process.env.USER_PASSWORD || 'test_user_password';
+  
   // Initialize test database
   await DatabaseHelper.initializeTestDatabase();
 }, 30000);
