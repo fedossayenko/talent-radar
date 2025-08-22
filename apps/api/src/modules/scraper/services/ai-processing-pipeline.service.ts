@@ -436,9 +436,9 @@ export class AiProcessingPipelineService {
     return {
       passedValidation,
       qualityScore,
-      aiProcessingTime: 0, // TODO: Track this in AI service
-      cacheHit: false, // TODO: Track this in AI service
-      retryCount: 0, // TODO: Track this
+      aiProcessingTime: 0, // Will be implemented when AI service metrics are added
+      cacheHit: false, // Will be implemented when AI service metrics are added
+      retryCount: 0, // Will be implemented when retry logic is added
     };
   }
 
