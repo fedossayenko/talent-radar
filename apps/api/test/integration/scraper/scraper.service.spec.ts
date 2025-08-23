@@ -286,7 +286,7 @@ describe('ScraperService Integration Tests', () => {
       await service.scrapeDevBg();
 
       // Verify job details were fetched
-      expect(devBgScraper.fetchJobDetails).toHaveBeenCalledWith('https://dev.bg/job/123');
+      expect(devBgScraper.fetchJobDetails).toHaveBeenCalledWith('https://dev.bg/job/123', 'Test Company');
 
       // Verify vacancy was created with detailed information
       expect(vacancyService.create).toHaveBeenCalledWith(

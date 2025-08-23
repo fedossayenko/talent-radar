@@ -489,7 +489,10 @@ describe('ScraperProcessor - Company Analysis', () => {
       aiService.isConfigured.mockReturnValue(true);
       companyProfileScraper.scrapeDevBgCompanyProfile.mockResolvedValue(mockScrapingResult);
       companySourceService.saveCompanySource.mockResolvedValue({} as any);
-      aiService.analyzeCompanyProfile.mockResolvedValue(analysisWithoutBasicInfo);
+      aiService.analyzeCompanyProfileWithRawResponse.mockResolvedValue({
+        result: analysisWithoutBasicInfo,
+        rawResponse: 'Mock AI raw response'
+      });
       companyService.createOrUpdateAnalysis.mockResolvedValue({} as any);
 
       // Act
