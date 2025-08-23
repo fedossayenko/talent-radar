@@ -1,15 +1,44 @@
 import { registerAs } from '@nestjs/config';
 
 export default registerAs('scraper', () => ({
-  devBg: {
-    baseUrl: process.env.DEV_BG_BASE_URL || 'https://dev.bg',
-    apiUrl: process.env.DEV_BG_API_URL || 'https://dev.bg/company/jobs/java/',
-    requestTimeout: parseInt(process.env.DEV_BG_REQUEST_TIMEOUT || '30000', 10),
-    requestDelay: parseInt(process.env.DEV_BG_REQUEST_DELAY || '2000', 10),
-    maxPages: parseInt(process.env.DEV_BG_MAX_PAGES || '10', 10),
-    userAgent: process.env.DEV_BG_USER_AGENT || 'TalentRadar/1.0 (Job Aggregator)',
+  // Global scraper settings
+  enabled: process.env.SCRAPER_ENABLED !== 'false',
+  enabledSites: process.env.SCRAPER_ENABLED_SITES ? 
+    process.env.SCRAPER_ENABLED_SITES.split(',') : ['dev.bg', 'jobs.bg'],
+
+  // Site-specific configurations
+  sites: {
+    devBg: {
+      enabled: process.env.DEV_BG_ENABLED !== 'false',
+      baseUrl: process.env.DEV_BG_BASE_URL || 'https://dev.bg',
+      apiUrl: process.env.DEV_BG_API_URL || 'https://dev.bg/company/jobs/java/',
+      requestTimeout: parseInt(process.env.DEV_BG_REQUEST_TIMEOUT || '30000', 10),
+      requestDelay: parseInt(process.env.DEV_BG_REQUEST_DELAY || '2000', 10),
+      maxPages: parseInt(process.env.DEV_BG_MAX_PAGES || '10', 10),
+      maxRetries: parseInt(process.env.DEV_BG_MAX_RETRIES || '3', 10),
+      userAgent: process.env.DEV_BG_USER_AGENT || 'TalentRadar/1.0 (Job Aggregator)',
+    },
+    
+    jobsBg: {
+      enabled: process.env.JOBS_BG_ENABLED !== 'false',
+      baseUrl: process.env.JOBS_BG_BASE_URL || 'https://www.jobs.bg',
+      searchUrl: process.env.JOBS_BG_SEARCH_URL || 'https://www.jobs.bg/front_job_search.php',
+      requestTimeout: parseInt(process.env.JOBS_BG_REQUEST_TIMEOUT || '30000', 10),
+      requestDelay: parseInt(process.env.JOBS_BG_REQUEST_DELAY || '3000', 10), // Slower for jobs.bg
+      maxPages: parseInt(process.env.JOBS_BG_MAX_PAGES || '10', 10),
+      maxRetries: parseInt(process.env.JOBS_BG_MAX_RETRIES || '3', 10),
+      userAgent: process.env.JOBS_BG_USER_AGENT || 'TalentRadar/1.0 (Job Aggregator)',
+    },
   },
-  enabled: process.env.SCRAPER_ENABLED === 'true' || true,
+
+  // Duplicate detection settings
+  duplicateDetection: {
+    enabled: process.env.DUPLICATE_DETECTION_ENABLED !== 'false',
+    fuzzyMatchThreshold: parseFloat(process.env.FUZZY_MATCH_THRESHOLD || '0.8'),
+    exactMatchThreshold: parseFloat(process.env.EXACT_MATCH_THRESHOLD || '0.95'),
+    companyMatchThreshold: parseFloat(process.env.COMPANY_MATCH_THRESHOLD || '0.8'),
+    enableCrossSiteDeduplication: process.env.CROSS_SITE_DEDUPLICATION !== 'false',
+  },
   // Technology detection patterns - can be extended via environment variables
   techPatterns: {
     // Core patterns are handled by TechPatternService
