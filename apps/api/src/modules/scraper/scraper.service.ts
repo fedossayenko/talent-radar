@@ -24,6 +24,7 @@ export interface ScrapingOptions {
   limit?: number;
   enableAiExtraction?: boolean;
   enableCompanyAnalysis?: boolean;
+  force?: boolean;
 }
 
 export interface CompanyAnalysisJobData {
@@ -62,7 +63,7 @@ export class ScraperService {
 
   async scrapeDevBg(options: ScrapingOptions = {}): Promise<ScrapingResult> {
     let { limit } = options;
-    const { enableAiExtraction = true, enableCompanyAnalysis = true } = options;
+    const { enableAiExtraction = true, enableCompanyAnalysis = true, force = false } = options;
     
     // If no explicit limit is provided, use the configured maxVacancies
     if (!limit) {
@@ -74,7 +75,7 @@ export class ScraperService {
     }
     
     const startTime = Date.now();
-    this.logger.log(`Starting dev.bg scraping process${limit ? ` (limit: ${limit} vacancies)` : ''} (AI: ${enableAiExtraction}, Company: ${enableCompanyAnalysis})`);
+    this.logger.log(`Starting dev.bg scraping process${limit ? ` (limit: ${limit} vacancies)` : ''} (AI: ${enableAiExtraction}, Company: ${enableCompanyAnalysis}, Force: ${force})`);
 
     const result: ScrapingResult = {
       totalJobsFound: 0,
@@ -101,7 +102,7 @@ export class ScraperService {
       // Process each job listing
       for (const jobListing of jobsToProcess) {
         try {
-          await this.processJobListing(jobListing, result, enableAiExtraction, enableCompanyAnalysis);
+          await this.processJobListing(jobListing, result, enableAiExtraction, enableCompanyAnalysis, force);
         } catch (error) {
           this.logger.error(`Failed to process job listing: ${jobListing.title}`, error);
           result.errors.push(`Failed to process ${jobListing.title}: ${error.message}`);
@@ -126,7 +127,7 @@ export class ScraperService {
     return result;
   }
 
-  private async processJobListing(jobListing: DevBgJobListing, result: ScrapingResult, enableAiExtraction: boolean = true, enableCompanyAnalysis: boolean = true): Promise<void> {
+  private async processJobListing(jobListing: DevBgJobListing, result: ScrapingResult, enableAiExtraction: boolean = true, enableCompanyAnalysis: boolean = true, force: boolean = false): Promise<void> {
     try {
       // Find or create company
       const company = await this.companyService.findOrCreate({
@@ -144,14 +145,16 @@ export class ScraperService {
       let rawHtml = '';
       let companyProfileUrl: string | undefined;
       let companyWebsite: string | undefined;
+      let salaryInfo: { min?: number; max?: number; currency?: string } | undefined;
 
       if (jobListing.url) {
         try {
-          const jobDetails = await this.devBgScraper.fetchJobDetails(jobListing.url);
+          const jobDetails = await this.devBgScraper.fetchJobDetails(jobListing.url, jobListing.company);
           description = jobDetails.description || description;
           rawHtml = jobDetails.rawHtml || '';
           companyProfileUrl = jobDetails.companyProfileUrl;
           companyWebsite = jobDetails.companyWebsite;
+          salaryInfo = jobDetails.salaryInfo;
           // Note: requirements from job details are not currently used, 
           // using technologies from job listing instead
         } catch (error) {
@@ -159,14 +162,16 @@ export class ScraperService {
         }
       }
 
-      // Prepare vacancy data
+      // Prepare vacancy data with enhanced salary information
       const vacancyData = {
         title: jobListing.title,
         description,
         requirements: JSON.stringify(jobListing.technologies),
         location: jobListing.location,
-        salaryMin: this.parseSalaryMin(jobListing.salaryRange),
-        salaryMax: this.parseSalaryMax(jobListing.salaryRange),
+        // Use extracted salary info if available, fallback to original parsing
+        salaryMin: salaryInfo?.min || this.parseSalaryMin(jobListing.salaryRange),
+        salaryMax: salaryInfo?.max || this.parseSalaryMax(jobListing.salaryRange),
+        currency: salaryInfo?.currency || null,
         experienceLevel: this.extractExperienceLevel(jobListing.title),
         employmentType: this.mapWorkModelToEmploymentType(jobListing.workModel),
         companyId: company.id,
@@ -215,8 +220,8 @@ export class ScraperService {
 
       // Process company URLs and queue company analysis if enabled
       if (enableCompanyAnalysis && (companyProfileUrl || companyWebsite)) {
-        this.logger.log(`Company analysis check: enabled=${enableCompanyAnalysis}, profileUrl=${!!companyProfileUrl}, website=${!!companyWebsite}`);
-        await this.processCompanyUrls(company.id, companyProfileUrl, companyWebsite);
+        this.logger.log(`Company analysis check: enabled=${enableCompanyAnalysis}, profileUrl=${!!companyProfileUrl}, website=${!!companyWebsite}, force=${force}`);
+        await this.processCompanyUrls(company.id, companyProfileUrl, companyWebsite, force);
       } else {
         this.logger.log(`Skipping company analysis: enabled=${enableCompanyAnalysis}, profileUrl=${!!companyProfileUrl}, website=${!!companyWebsite}`);
       }
@@ -358,16 +363,16 @@ export class ScraperService {
   /**
    * Process company URLs and queue analysis jobs if needed
    */
-  private async processCompanyUrls(companyId: string, companyProfileUrl?: string, companyWebsite?: string): Promise<void> {
+  private async processCompanyUrls(companyId: string, companyProfileUrl?: string, companyWebsite?: string, force = false): Promise<void> {
     try {
       // Process dev.bg company profile URL if available
       if (companyProfileUrl) {
-        await this.processCompanySource(companyId, 'dev.bg', companyProfileUrl, 'profile');
+        await this.processCompanySource(companyId, 'dev.bg', companyProfileUrl, 'profile', force);
       }
 
       // Process company website URL if available
       if (companyWebsite) {
-        await this.processCompanySource(companyId, 'company_website', companyWebsite, 'website');
+        await this.processCompanySource(companyId, 'company_website', companyWebsite, 'website', force);
       }
 
     } catch (error) {
@@ -382,14 +387,16 @@ export class ScraperService {
     companyId: string,
     sourceSite: string,
     sourceUrl: string,
-    analysisType: 'profile' | 'website'
+    analysisType: 'profile' | 'website',
+    force = false
   ): Promise<void> {
     try {
       // Check if we should scrape this company source
       const cacheCheck = await this.companySourceService.shouldScrapeCompanySource(
         companyId,
         sourceSite,
-        sourceUrl
+        sourceUrl,
+        force
       );
 
       this.logger.log(`Company source check for ${sourceSite}: ${cacheCheck.reason}`);

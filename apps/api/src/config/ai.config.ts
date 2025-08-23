@@ -47,6 +47,18 @@ export const aiConfig = registerAs('ai', () => {
 
 Source: {sourceUrl}
 
+SALARY EXTRACTION INSTRUCTIONS:
+Look for salary information in ALL possible formats:
+- "4,500 - 9,500 BGN net" → salaryMin: 4500, salaryMax: 9500, currency: "BGN"
+- "€50,000-€60,000" → salaryMin: 50000, salaryMax: 60000, currency: "EUR"
+- "Up to $120,000" → salaryMin: null, salaryMax: 120000, currency: "USD"
+- "2000 лв месечно" → salaryMin: 2000, salaryMax: null, currency: "BGN"
+- "Monthly: 3000-5000 лева" → salaryMin: 3000, salaryMax: 5000, currency: "BGN"
+- "От 5000 до 8000 лв" → salaryMin: 5000, salaryMax: 8000, currency: "BGN"
+
+Bulgarian currency parsing: "лв"/"лева"/"BGN" = "BGN"
+Always extract exact numbers, remove thousand separators (commas).
+
 Return JSON with ALL these fields (use null for missing values):
 - title: string
 - company: string  
@@ -103,9 +115,21 @@ URL: {sourceUrl}
 
 CRITICAL: Return null for name if this is a job board/aggregator, not company site.
 
+CONTACT EXTRACTION (Priority):
+Look for: phone numbers, email addresses, physical addresses, business license numbers
+
 JSON fields:
 - name: (actual company, NOT job board)
 - description, industry, location, website: (key info)
+- contactEmail: email address (info@, contact@, etc.)
+- contactPhone: phone number with country code
+- address: full physical address 
+- services: array of services offered
+- companyType: "agency", "product", "startup", "enterprise"
+- businessLicense: any license/registration numbers
+- clientProjects: array of notable projects/clients mentioned
+- foundedYear: founding year or years in business
+- employeeCount: number of employees/team size
 - technologies, benefits, values: (arrays)
 - workEnvironment: (brief culture desc)
 - pros: [top 3], cons: [top 3]

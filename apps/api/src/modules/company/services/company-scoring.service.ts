@@ -810,17 +810,18 @@ export class CompanyScoringService {
    * Calculate confidence level based on data completeness and source reliability
    */
   private calculateConfidenceLevel(input: ScoringInput): number {
-    let confidence = input.dataCompleteness * 0.7; // Base on data completeness
+    let confidence = (input.dataCompleteness || 0) * 0.7; // Base on data completeness
 
     // Adjust for source reliability
-    confidence += input.sourceReliability * 0.3;
+    confidence += (input.sourceReliability || 0) * 0.3;
 
     // Bonus for structured data
     if ((input.technologies || []).length > 0) confidence += 5;
     if ((input.benefits || []).length > 0) confidence += 5;
     if ((input.values || []).length > 0) confidence += 5;
 
-    return Math.min(100, Math.round(confidence));
+    const result = Math.min(100, Math.round(confidence || 0));
+    return isNaN(result) ? 0 : result;
   }
 
   /**

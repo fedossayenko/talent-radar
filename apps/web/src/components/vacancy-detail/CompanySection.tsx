@@ -1,6 +1,7 @@
+import { Link } from 'react-router-dom'
 import { Company } from '@/types/vacancy'
 import { getCompanyInitials } from '@/lib/utils'
-import { ArrowTopRightOnSquareIcon } from '@heroicons/react/24/outline'
+import { ArrowTopRightOnSquareIcon, EyeIcon } from '@heroicons/react/24/outline'
 
 interface CompanySectionProps {
   company: Company
@@ -145,19 +146,33 @@ export default function CompanySection({ company }: CompanySectionProps) {
         </div>
 
         {/* Call to Action */}
-        {company.website && (
-          <div className="mt-6 text-center">
-            <a
-              href={company.website}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+        <div className="mt-6 text-center space-y-3">
+          {/* View Company Profile */}
+          <div>
+            <Link
+              to={`/companies/${company.id}`}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
             >
-              Visit Company Website
-              <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-2" />
-            </a>
+              <EyeIcon className="w-4 h-4 mr-2" />
+              View Full Company Profile
+            </Link>
           </div>
-        )}
+
+          {/* Visit Website */}
+          {company.website && (
+            <div>
+              <a
+                href={company.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+              >
+                Visit Company Website
+                <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-2" />
+              </a>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

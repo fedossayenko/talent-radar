@@ -179,11 +179,33 @@ describe('CompanyService', () => {
 
       // Assert
       expect(result.success).toBe(true);
-      expect(result.data).toEqual(mockCompany);
+      expect(result.data).toEqual({
+        ...mockCompany,
+        latestAnalysis: null,
+        activeVacanciesCount: 0,
+        hasAnalysis: false,
+        vacancies: undefined,
+        salaryRange: null,
+        contactInfo: null,
+        companyDetails: null,
+        analyses: undefined,
+        _count: undefined,
+      });
       expect(prismaService.company.findUnique).toHaveBeenCalledWith({
         where: { id: companyId },
         include: {
           analyses: {
+            orderBy: { createdAt: 'desc' },
+          },
+          sources: {
+            select: {
+              id: true,
+              sourceSite: true,
+              sourceUrl: true,
+              isValid: true,
+              lastScrapedAt: true,
+              createdAt: true,
+            },
             orderBy: { createdAt: 'desc' },
           },
           vacancies: {
@@ -196,6 +218,11 @@ describe('CompanyService', () => {
               experienceLevel: true,
               employmentType: true,
               location: true,
+              salaryMin: true,
+              salaryMax: true,
+              currency: true,
+              benefits: true,
+              requirements: true,
               createdAt: true,
             },
           },

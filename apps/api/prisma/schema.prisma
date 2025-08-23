@@ -116,6 +116,11 @@ model CompanyAnalysis {
   rawData                Json?    @db.JsonB // JSON string of raw analysis data
   sourceDataSummary      String?  // Summary of what sources were used
   
+  // Enhanced AI processing traceability (Phase 1: Pipeline transparency)
+  cleanedContentForAi   String?  // Final cleaned text sent to AI models
+  rawAiResponse         String?  // Unprocessed AI response (JSON string)
+  aiProcessingSteps     Json?    @db.JsonB // Processing pipeline metadata and steps
+  
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
@@ -128,6 +133,9 @@ model CompanyAnalysis {
   @@index([recommendationScore])
   @@index([cultureScore])
   @@index([confidenceScore])
+  // AI processing traceability indexes (field-based for Prisma compatibility)
+  @@index([rawAiResponse], map: "company_analyses_raw_ai_response_idx")
+  @@index([cleanedContentForAi], map: "company_analyses_cleaned_content_idx")
   // Modern scoring system indexes
   @@index([overallScore])
   @@index([industryPercentile])
@@ -166,6 +174,11 @@ model Vacancy {
   rawContent            String?  // Original scraped content for reprocessing
   aiExtractedData       Json?    @db.JsonB // JSON of all AI-extracted structured data
   
+  // Enhanced AI processing traceability (Phase 1: Pipeline transparency)
+  cleanedContentForAi   String?  // Final cleaned text sent to AI models
+  rawAiResponse         String?  // Unprocessed AI response (JSON string)  
+  aiProcessingSteps     Json?    @db.JsonB // Processing pipeline metadata and steps
+  
   // Enhanced structured fields from AI extraction
   responsibilities      Json?    @db.JsonB // JSON array of job responsibilities
   technologies         Json?    @db.JsonB // JSON array of technologies and tools
@@ -184,6 +197,9 @@ model Vacancy {
   @@index([contentHash])
   @@index([extractionConfidence])
   @@index([qualityScore])
+  // AI processing traceability indexes (field-based for Prisma compatibility) 
+  @@index([rawAiResponse], map: "vacancies_raw_ai_response_idx")
+  @@index([cleanedContentForAi], map: "vacancies_cleaned_content_idx")
   @@index([sourceSite])
   @@index([companyId])
   @@index([experienceLevel])

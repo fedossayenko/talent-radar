@@ -6,190 +6,88 @@
 
 TalentRadar is a comprehensive job tracking application designed to help IT developers find and apply to the best opportunities. It automates job discovery, provides AI-powered insights about companies and positions, and assists with application materials.
 
-## Features
+## ✨ Key Features
 
-### Core Functionality
-- **Job Source Management**: Track multiple job boards and company sites
-- **Intelligent Scraping**: Automated background monitoring for new vacancies
-- **AI-Powered Analysis**: Extract company insights, salary estimates, and tech stack information
-- **Smart Scoring**: Rank positions based on multiple factors
-- **Duplicate Detection**: Merge similar positions from different sources
+- 🤖 **AI-Powered Job Discovery** - Smart scraping with OpenAI analysis of job posts and company profiles
+- 📊 **Intelligent Company Scoring** - Multi-factor evaluation algorithm ranking companies by culture, tech, and growth
+- 🔍 **Multi-Source Scraping** - Dev.bg integration + direct company website analysis  
+- 📝 **Automated CV & Cover Letters** - AI-powered resume enhancement and personalized application materials
+- 🔄 **Real-time Job Tracking** - Live updates with advanced duplicate detection and content merging
+- 📱 **Smart Application Management** - Track applications, follow-ups, and interview processes
+- ⚡ **Advanced Search & Filtering** - Find jobs by tech stack, salary, location, and company metrics
+- 🚀 **Production-Ready Architecture** - NestJS + React with comprehensive testing and Docker support
 
-### Application Tools
-- **CV Enhancement**: AI-powered resume improvement with targeted prompts
-- **Cover Letter Generation**: Automatic personalized cover letters for each application
-- **Application Tracking**: Monitor application status and follow-ups
+## 🛠️ Technology Stack
 
-### Insights & Analytics
-- **Company Analysis**: Size, culture, hiring process, retention rates
-- **Salary Intelligence**: Expected compensation ranges
-- **Tech Stack Matching**: Technology alignment scoring
-- **Market Trends**: Industry insights and opportunities
+**Backend:** NestJS + TypeScript + PostgreSQL + Redis + Playwright + Prisma  
+**Frontend:** React 18 + Vite + React Router + TailwindCSS + React Query  
+**AI:** OpenAI API + Direct integration  
+**Infrastructure:** Docker + BullMQ + Railway/Fly.io
 
-## Technology Stack
+## 🚀 Quick Start
 
-### Backend
-- **Framework**: NestJS with TypeScript
-- **Database**: PostgreSQL + Redis
-- **Queue**: BullMQ for background jobs
-- **Web Scraping**: Playwright
-- **ORM**: Prisma
-
-### Frontend
-- **Framework**: Next.js 14 with App Router
-- **Styling**: TailwindCSS + shadcn/ui
-- **State Management**: React Query
-
-### AI & Services
-- **AI Provider**: OpenRouter API
-- **Orchestration**: LangChain
-- **Hosting**: Railway/Fly.io
-
-## Quick Start
-
-### Prerequisites
-- Node.js 22+
-- npm 10+
-- PostgreSQL 14+
-- Redis 6+
-
-### Installation
+**Prerequisites:** Node.js 22+, PostgreSQL, Redis  
+**Optional:** Docker for easy setup
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd talent-radar
+# Clone and install
+git clone https://github.com/yourusername/talent-radar.git
+cd talent-radar && npm install
 
-# Install dependencies
-npm install
+# Setup environment
+cp .env.example .env  # Edit with your database & OpenAI key
 
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your configuration
-
-# Start development environment
-npm run dev
+# Start development
+npm run dev:api  # Backend (3001)
+npm run dev:web  # Frontend (3000) - separate terminal
 ```
 
-### Development
+📚 **Detailed setup guide**: [Installation Docs](./docs/INSTALLATION.md)
 
-```bash
-# Start all services
-npm run dev
+## 🏗️ Architecture
 
-# Start individual services
-npm run dev:api      # Backend API
-npm run dev:web      # Frontend
-npm run dev:scraper  # Background scraper
-```
-
-## Architecture
-
-TalentRadar follows a modular monorepo architecture:
+TalentRadar follows a monorepo architecture:
 
 ```
 talent-radar/
 ├── apps/
-│   ├── web/          # Next.js frontend
-│   └── api/          # NestJS backend
-├── packages/
-│   ├── shared/       # Shared types and utilities
-│   └── database/     # Prisma schema and migrations
-└── docs/            # Documentation
+│   ├── web/          # React + Vite frontend
+│   └── api/          # NestJS backend with Prisma
+├── docker/           # Docker configuration
+├── docs/             # Documentation
+└── scripts/          # Development and deployment scripts
 ```
 
-## Configuration
+## ⚙️ Configuration
 
-### Environment Variables
+Create `.env` file with essential variables:
 
 ```bash
-# Database
 DATABASE_URL=postgresql://user:password@localhost:5432/talent_radar
 REDIS_URL=redis://localhost:6379
-
-# AI Services
-OPENROUTER_API_KEY=your_openrouter_key
-
-# Scraping
-PLAYWRIGHT_HEADLESS=true
-SCRAPER_CONCURRENCY=3
+OPENAI_API_KEY=your_openai_key
 ```
 
-### Job Sources
+📋 **Full configuration options**: See [Configuration Guide](./docs/CONFIGURATION.md)
 
-Configure job sources in the admin panel or via API:
+## 📖 API Documentation
 
-```json
-{
-  "name": "LinkedIn Jobs",
-  "url": "https://linkedin.com/jobs/search/",
-  "type": "linkedin",
-  "countries": ["US", "CA", "DE"],
-  "technologies": ["JavaScript", "TypeScript", "React"]
-}
-```
+Interactive API docs with all endpoints: **`http://localhost:3001/api/docs`** (when running locally)
 
-## API Documentation
+## 🚀 Deployment
 
-The API documentation is available at `/api/docs` when running in development mode.
+**Docker:** `docker-compose up -d`  
+**Cloud:** Railway, Fly.io, or any Node.js host  
 
-### Key Endpoints
+📋 **Full deployment guide**: [Deployment Docs](./docs/DEPLOYMENT.md)
 
-- `GET /api/v1/vacancies` - List all tracked positions
-- `POST /api/v1/sources` - Add new job source
-- `GET /api/v1/companies/:id` - Company details and analysis
-- `POST /api/v1/cv/improve` - AI-powered CV enhancement
-- `POST /api/v1/applications` - Generate cover letter and apply
+## 🚀 Status: Production Ready
 
-## Deployment
+TalentRadar is a **feature-complete application** with comprehensive testing, Docker support, and production deployment capabilities. All core job tracking, AI analysis, and application management features are fully implemented and operational.
 
-### Production Deployment
-
-```bash
-# Build for production
-npm run build
-
-# Deploy to Railway
-railway deploy
-
-# Or deploy to Fly.io
-flyctl deploy
-```
-
-### Docker
-
-```bash
-# Build and run with Docker Compose
-docker-compose up -d
-```
-
-## Development Roadmap
-
-### Phase 1 (MVP) - Weeks 1-2
-- [x] Project setup and architecture
-- [ ] Basic job source management
-- [ ] Web scraper implementation
-- [ ] Core database models
-- [ ] Simple UI for job listings
-
-### Phase 2 (AI Enhancement) - Weeks 3-4
-- [ ] AI company analysis integration
-- [ ] Vacancy scoring algorithm
-- [ ] Duplicate detection and merging
-- [ ] Advanced filtering and search
-
-### Phase 3 (Application Tools) - Weeks 5-6
-- [ ] CV upload and parsing
-- [ ] AI-powered CV improvement
-- [ ] Cover letter generation
-- [ ] Application tracking
-
-### Future Enhancements
-- [ ] Multi-user support with authentication
-- [ ] Email notifications and alerts
-- [ ] Browser extension for quick saves
-- [ ] Mobile application
-- [ ] Machine learning for personalized recommendations
+**🎯 Ready for:** Personal use, team deployment, production hosting  
+**📋 Includes:** Full test coverage, Docker setup, API documentation  
+**🔧 Next:** [Planned enhancements](./docs/ROADMAP.md) include multi-user auth and mobile app
 
 ## Contributing
 
@@ -203,9 +101,8 @@ docker-compose up -d
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Support
+## 📞 Support
 
-For support and questions:
-- Create an issue in the repository
-- Check the [documentation](./docs/)
-- Review the [troubleshooting guide](./docs/TROUBLESHOOTING.md)
+💬 **Questions**: [GitHub Issues](../../issues)  
+📚 **Documentation**: [./docs/](./docs/)  
+🔧 **Troubleshooting**: [Troubleshooting Guide](./docs/TROUBLESHOOTING.md)

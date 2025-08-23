@@ -161,6 +161,8 @@ export class ScraperProcessor implements OnModuleInit {
         return {
           success: false,
           vacancyData: null,
+          cleanedContentSentToAi: '',
+          rawAiResponse: '',
           metadata: {
             contentExtraction: null as any,
             htmlCleaning: null as any,
@@ -377,14 +379,19 @@ export class ScraperProcessor implements OnModuleInit {
 
       await job.progress(70);
 
-      // Analyze content with AI
+      // Analyze content with AI (enhanced with raw response)
       let analysisResult;
+      let rawAiResponse = '';
       const content = scrapingResult.data?.rawContent || '';
       
       if (data.analysisType === 'profile') {
-        analysisResult = await this.aiService.analyzeCompanyProfile(content, data.sourceUrl);
+        const { result, rawResponse } = await this.aiService.analyzeCompanyProfileWithRawResponse(content, data.sourceUrl);
+        analysisResult = result;
+        rawAiResponse = rawResponse;
       } else {
-        analysisResult = await this.aiService.analyzeCompanyWebsite(content, data.sourceUrl);
+        const { result, rawResponse } = await this.aiService.analyzeCompanyWebsiteWithRawResponse(content, data.sourceUrl);
+        analysisResult = result;
+        rawAiResponse = rawResponse;
       }
 
       if (!analysisResult) {
@@ -399,8 +406,8 @@ export class ScraperProcessor implements OnModuleInit {
 
       await job.progress(90);
 
-      // Save analysis results to company
-      await this.saveCompanyAnalysis(data.companyId, analysisResult, data.sourceSite);
+      // Save analysis results to company with enhanced traceability
+      await this.saveCompanyAnalysis(data.companyId, analysisResult, data.sourceSite, undefined, content, rawAiResponse);
 
       await job.progress(100);
 
@@ -435,9 +442,9 @@ export class ScraperProcessor implements OnModuleInit {
   }
 
   /**
-   * Save company analysis results to database with enhanced scoring
+   * Save company analysis results to database with enhanced scoring and traceability
    */
-  private async saveCompanyAnalysis(companyId: string, analysisResult: any, sourceSite: string, structuredData?: any): Promise<void> {
+  private async saveCompanyAnalysis(companyId: string, analysisResult: any, sourceSite: string, structuredData?: any, cleanedContent?: string, rawAiResponse?: string): Promise<void> {
     try {
       // Update company with basic info if available
       if (analysisResult.name || analysisResult.description || analysisResult.industry) {
@@ -539,6 +546,17 @@ export class ScraperProcessor implements OnModuleInit {
           companyScore: companyScore || null,
           structuredData: structuredData || null,
           enhancedAnalysis: !!companyScore,
+        }),
+        
+        // Enhanced AI processing traceability
+        cleanedContentForAi: cleanedContent || null,
+        rawAiResponse: rawAiResponse || null,
+        aiProcessingSteps: JSON.stringify({
+          processingSteps: ['content-scraping', 'ai-analysis'],
+          cleanedContentLength: cleanedContent?.length || 0,
+          rawAiResponseLength: rawAiResponse?.length || 0,
+          scoringEnhanced: !!companyScore,
+          analysisTimestamp: new Date().toISOString(),
         }),
       };
 
@@ -693,6 +711,25 @@ export class ScraperProcessor implements OnModuleInit {
         }),
         aiExtractedData: JSON.stringify(extractionResult),
         rawContent: pipelineResult.metadata.contentExtraction?.content,
+        
+        // Enhanced AI processing traceability
+        cleanedContentForAi: pipelineResult.cleanedContentSentToAi,
+        rawAiResponse: pipelineResult.rawAiResponse || null,
+        aiProcessingSteps: JSON.stringify({
+          contentExtractionLength: pipelineResult.metadata.contentExtraction?.metadata?.cleanedLength,
+          htmlCleaningProfile: pipelineResult.metadata.htmlCleaning?.appliedProfile,
+          finalCleanedLength: pipelineResult.cleanedContentSentToAi?.length || 0,
+          compressionRatio: pipelineResult.cleanedContentSentToAi?.length && pipelineResult.metadata.contentExtraction?.metadata?.originalLength ? 
+            pipelineResult.cleanedContentSentToAi.length / pipelineResult.metadata.contentExtraction.metadata.originalLength : 0,
+          processingSteps: ['content-extraction', 'html-cleaning', 'ai-processing', 'quality-validation'],
+          aiModelUsed: 'gpt-5-nano',
+          processingTime: pipelineResult.metadata.processing.totalTime,
+          cacheHit: pipelineResult.metadata.processing.cacheHit,
+          retryCount: pipelineResult.metadata.processing.retryCount,
+          qualityCheckPassed: pipelineResult.metadata.processing.qualityCheckPassed,
+          errors: pipelineResult.errors,
+          warnings: pipelineResult.warnings,
+        }),
       };
 
       // Remove undefined values
@@ -705,11 +742,17 @@ export class ScraperProcessor implements OnModuleInit {
 
       await this.vacancyService.update(vacancyId, cleanedUpdateData);
       
-      this.logger.log(`Updated vacancy ${vacancyId} with pipeline-extracted data`, {
+      this.logger.log(`Updated vacancy ${vacancyId} with enhanced pipeline data`, {
         qualityScore: pipelineResult.metadata.qualityScore,
         confidenceScore: pipelineResult.metadata.confidenceScore,
         processingTime: pipelineResult.metadata.processing.totalTime,
         fieldsUpdated: Object.keys(cleanedUpdateData).length,
+        // Enhanced traceability info
+        cleanedContentLength: pipelineResult.cleanedContentSentToAi?.length || 0,
+        hasRawAiResponse: !!(pipelineResult.rawAiResponse),
+        rawResponseLength: pipelineResult.rawAiResponse?.length || 0,
+        compressionRatio: pipelineResult.cleanedContentSentToAi?.length && pipelineResult.metadata.contentExtraction?.metadata?.originalLength ? 
+          (pipelineResult.cleanedContentSentToAi.length / pipelineResult.metadata.contentExtraction.metadata.originalLength).toFixed(2) : 'N/A',
       });
 
     } catch (error) {

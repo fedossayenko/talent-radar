@@ -33,19 +33,22 @@ export class ScraperController {
 
   @Public()
   @Post('dev-bg/test')
-  async triggerTestScraping(@Query('limit') limit?: string) {
+  async triggerTestScraping(@Query('limit') limit?: string, @Query('force') force?: string) {
     const limitNum = limit ? parseInt(limit, 10) : 1;
-    this.logger.log(`Test scraping triggered via API with limit: ${limitNum}`);
+    const forceFlag = force === 'true';
+    this.logger.log(`Test scraping triggered via API with limit: ${limitNum}, force: ${forceFlag}`);
     
     try {
       const result = await this.scraperService.scrapeDevBg({
         limit: limitNum,
         enableAiExtraction: true,
+        enableCompanyAnalysis: true,
+        force: forceFlag,
       });
       
       return {
         success: true,
-        message: `Test scraping completed with ${limitNum} vacancy limit`,
+        message: `Test scraping completed with ${limitNum} vacancy limit, force: ${forceFlag}`,
         data: result,
       };
     } catch (error) {

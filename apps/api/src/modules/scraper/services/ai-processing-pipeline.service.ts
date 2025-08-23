@@ -27,6 +27,11 @@ export interface PipelineOptions {
 export interface PipelineResult {
   success: boolean;
   vacancyData: VacancyExtractionResult | null;
+  
+  // Enhanced traceability fields
+  cleanedContentSentToAi: string;
+  rawAiResponse?: string;
+  
   metadata: {
     contentExtraction: ContentExtractionResult;
     htmlCleaning: CleaningResult;
@@ -103,17 +108,22 @@ export class AiProcessingPipelineService {
       // Step 2: Clean and optimize content
       const cleaningResult = await this.cleanContent(contentResult, input, errors, warnings);
       
-      // Step 3: Process with AI for structured extraction
-      const aiResult = await this.processWithAi(cleaningResult.cleanedText, input, errors, warnings);
+      // Step 3: Process with AI for structured extraction (enhanced with raw response)
+      const aiProcessingResult = await this.processWithAi(cleaningResult.cleanedText, input, errors, warnings);
       
       // Step 4: Perform quality validation
-      const qualityResult = await this.validateQuality(aiResult, contentResult, input, errors, warnings);
+      const qualityResult = await this.validateQuality(aiProcessingResult.aiResult, contentResult, input, errors, warnings);
       
       const totalTime = Date.now() - startTime;
 
       const result: PipelineResult = {
-        success: aiResult !== null && errors.length === 0,
-        vacancyData: qualityResult.passedValidation ? aiResult : null,
+        success: aiProcessingResult.aiResult !== null && errors.length === 0,
+        vacancyData: qualityResult.passedValidation ? aiProcessingResult.aiResult : null,
+        
+        // Enhanced traceability: cleaned content and raw response
+        cleanedContentSentToAi: cleaningResult.cleanedText,
+        rawAiResponse: aiProcessingResult.rawResponse,
+        
         metadata: {
           contentExtraction: contentResult,
           htmlCleaning: cleaningResult,
@@ -125,7 +135,7 @@ export class AiProcessingPipelineService {
             retryCount: qualityResult.retryCount,
           },
           qualityScore: qualityResult.qualityScore,
-          confidenceScore: aiResult?.confidenceScore || 0,
+          confidenceScore: aiProcessingResult.aiResult?.confidenceScore || 0,
         },
         errors,
         warnings,
@@ -149,6 +159,11 @@ export class AiProcessingPipelineService {
       return {
         success: false,
         vacancyData: null,
+        
+        // Enhanced traceability: empty values for failed processing
+        cleanedContentSentToAi: '',
+        rawAiResponse: '',
+        
         metadata: {
           contentExtraction: null as any,
           htmlCleaning: null as any,
@@ -314,26 +329,30 @@ export class AiProcessingPipelineService {
   }
 
   /**
-   * Process content with AI
+   * Process content with AI - Enhanced version with raw response
    */
   private async processWithAi(
     cleanedContent: string,
     input: PipelineInput,
     errors: string[],
     warnings: string[]
-  ): Promise<VacancyExtractionResult | null> {
+  ): Promise<{ aiResult: VacancyExtractionResult | null; rawResponse?: string }> {
     const maxRetries = input.options?.aiOptions?.maxRetries || 2;
     let retryCount = 0;
+    let lastRawResponse = '';
 
     while (retryCount <= maxRetries) {
       try {
-        const result = await this.aiService.extractVacancyData(
+        // Use the enhanced AI service method that returns both structured result and raw response
+        const { result, rawResponse } = await this.aiService.extractVacancyDataWithRawResponse(
           cleanedContent,
           input.sourceUrl,
           {
             skipCache: input.options?.aiOptions?.skipCache || false,
           }
         );
+
+        lastRawResponse = rawResponse; // Keep track of the raw response
 
         if (result) {
           // Check if retry is needed based on confidence
@@ -345,11 +364,11 @@ export class AiProcessingPipelineService {
             continue;
           }
 
-          return result;
+          return { aiResult: result, rawResponse };
         }
 
         errors.push('AI extraction returned null result');
-        return null;
+        return { aiResult: null, rawResponse: lastRawResponse };
 
       } catch (error) {
         if (retryCount < maxRetries) {
@@ -360,12 +379,12 @@ export class AiProcessingPipelineService {
           await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
         } else {
           errors.push(`AI processing failed after ${maxRetries + 1} attempts: ${error.message}`);
-          return null;
+          return { aiResult: null, rawResponse: lastRawResponse };
         }
       }
     }
 
-    return null;
+    return { aiResult: null, rawResponse: lastRawResponse };
   }
 
   /**

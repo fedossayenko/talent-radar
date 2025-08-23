@@ -7,10 +7,23 @@ export class CompanyService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  private parseJsonField(field: any): any {
+    if (!field || typeof field !== 'string') {
+      return field;
+    }
+    
+    try {
+      return JSON.parse(field);
+    } catch (error) {
+      this.logger.warn(`Failed to parse JSON field: ${field}`, error);
+      return field;
+    }
+  }
+
   async findAll(query: any) {
     const {
-      page = 1,
-      limit = 20,
+      page: pageParam = 1,
+      limit: limitParam = 20,
       search,
       industry,
       size,
@@ -18,6 +31,10 @@ export class CompanyService {
       sortOrder,
       hasAnalysis,
     } = query;
+
+    // Convert string parameters to numbers
+    const page = parseInt(pageParam.toString(), 10) || 1;
+    const limit = parseInt(limitParam.toString(), 10) || 20;
 
     this.logger.log(`Finding companies with filters: ${JSON.stringify(query)}`);
 
@@ -157,6 +174,17 @@ export class CompanyService {
           analyses: {
             orderBy: { createdAt: 'desc' },
           },
+          sources: {
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              sourceSite: true,
+              sourceUrl: true,
+              lastScrapedAt: true,
+              isValid: true,
+              createdAt: true,
+            },
+          },
           vacancies: {
             where: { status: 'active' },
             orderBy: { createdAt: 'desc' },
@@ -167,6 +195,11 @@ export class CompanyService {
               experienceLevel: true,
               employmentType: true,
               location: true,
+              salaryMin: true,
+              salaryMax: true,
+              currency: true,
+              benefits: true,
+              requirements: true,
               createdAt: true,
             },
           },
@@ -182,9 +215,82 @@ export class CompanyService {
         throw new NotFoundException(`Company with ID ${id} not found`);
       }
 
+      // Transform data to match frontend expectations
+      const latestAnalysis = company.analyses?.[0] || null;
+      const activeVacanciesCount = company._count?.vacancies || 0;
+      const hasAnalysis = (company.analyses?.length || 0) > 0;
+
+      // Parse JSON string fields in analysis if they exist
+      let transformedAnalysis = latestAnalysis;
+      let contactInfo = null;
+      let companyDetails = null;
+
+      if (latestAnalysis) {
+        // Parse JSON fields
+        transformedAnalysis = {
+          ...latestAnalysis,
+          techStack: this.parseJsonField(latestAnalysis.techStack),
+          benefits: this.parseJsonField(latestAnalysis.benefits),
+          hiringProcess: this.parseJsonField(latestAnalysis.hiringProcess),
+          pros: this.parseJsonField(latestAnalysis.pros),
+          cons: this.parseJsonField(latestAnalysis.cons),
+          growthOpportunities: this.parseJsonField(latestAnalysis.growthOpportunities),
+          companyValues: this.parseJsonField(latestAnalysis.companyValues),
+        };
+
+        // Extract contact info from rawData if available
+        const rawData = this.parseJsonField(latestAnalysis.rawData);
+        if (rawData) {
+          contactInfo = {
+            email: rawData.contactEmail || null,
+            phone: rawData.contactPhone || null,
+            address: rawData.address || null,
+          };
+
+          companyDetails = {
+            services: rawData.services || null,
+            companyType: rawData.companyType || null,
+            businessLicense: rawData.businessLicense || null,
+            clientProjects: rawData.clientProjects || null,
+          };
+        }
+      }
+
+      // Parse JSON fields in vacancies
+      const processedVacancies = company.vacancies?.map(vacancy => ({
+        ...vacancy,
+        benefits: this.parseJsonField(vacancy.benefits),
+        requirements: this.parseJsonField(vacancy.requirements),
+      }));
+
+      // Calculate salary range from all vacancies
+      const salaryRanges = processedVacancies
+        ?.filter(v => v.salaryMin || v.salaryMax)
+        .map(v => ({ min: v.salaryMin, max: v.salaryMax, currency: v.currency }));
+      
+      const companySalaryRange = salaryRanges && salaryRanges.length > 0 ? {
+        min: Math.min(...salaryRanges.map(r => r.min).filter(Boolean)),
+        max: Math.max(...salaryRanges.map(r => r.max).filter(Boolean)),
+        currency: salaryRanges[0]?.currency || 'BGN',
+      } : null;
+
+      const transformedCompany = {
+        ...company,
+        latestAnalysis: transformedAnalysis,
+        activeVacanciesCount,
+        hasAnalysis,
+        vacancies: processedVacancies,
+        salaryRange: companySalaryRange,
+        contactInfo,
+        companyDetails,
+        // Remove analyses array since frontend expects latestAnalysis
+        analyses: undefined,
+        _count: undefined,
+      };
+
       return {
         success: true,
-        data: company,
+        data: transformedCompany,
       };
     } catch (error) {
       this.logger.error(`Failed to find company ${id}:`, error);
@@ -270,8 +376,8 @@ export class CompanyService {
     }
   }
 
-  async analyzeCompany(id: string, forceRefresh = false) {
-    this.logger.log(`Analyzing company ${id}, forceRefresh: ${forceRefresh}`);
+  async analyzeCompany(id: string, forceRefresh = false, force = false) {
+    this.logger.log(`Analyzing company ${id}, forceRefresh: ${forceRefresh}, force: ${force}`);
 
     try {
       const company = await this.prisma.company.findUnique({
@@ -711,6 +817,8 @@ export class CompanyService {
   }
 
   private getScoreByMetric(scores: any, metric: string): number | null {
+    if (!scores) return null;
+    
     const scoreMap: Record<string, string> = {
       overall: 'overall',
       culture: 'culture',
@@ -719,7 +827,7 @@ export class CompanyService {
       tech: 'techCulture',
     };
     const scoreKey = scoreMap[metric] || 'overall';
-    return scores[scoreKey];
+    return scores[scoreKey] || null;
   }
 
   private getRecommendationLevel(recommendationScore: number | null): string {

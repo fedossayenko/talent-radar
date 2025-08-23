@@ -115,12 +115,13 @@ export class DevBgScraper {
     return allJobs;
   }
 
-  async fetchJobDetails(jobUrl: string): Promise<{ 
+  async fetchJobDetails(jobUrl: string, companyName?: string): Promise<{ 
     description: string; 
     requirements: string; 
     rawHtml?: string;
     companyProfileUrl?: string;
     companyWebsite?: string;
+    salaryInfo?: { min?: number; max?: number; currency?: string };
   }> {
     try {
       this.logger.log(`Fetching job details from: ${jobUrl}`);
@@ -131,7 +132,8 @@ export class DevBgScraper {
       });
 
       const jobDetails = this.jobParserService.parseJobDetailsFromHtml(response.data);
-      const companyUrls = this.jobParserService.extractCompanyUrls(response.data);
+      const companyUrls = this.jobParserService.extractCompanyUrls(response.data, companyName);
+      const salaryInfo = this.extractSalaryFromContent(response.data);
       
       return {
         description: this.translationService.translateJobTerms(jobDetails.description),
@@ -139,11 +141,77 @@ export class DevBgScraper {
         rawHtml: response.data,
         companyProfileUrl: companyUrls.profileUrl,
         companyWebsite: companyUrls.website,
+        salaryInfo,
       };
 
     } catch (error) {
       this.logger.warn(`Failed to fetch job details from ${jobUrl}:`, error.message);
       return { description: '', requirements: '' };
+    }
+  }
+
+  private extractSalaryFromContent(html: string): { min?: number; max?: number; currency?: string } | undefined {
+    try {
+      // Remove HTML tags to get plain text
+      const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');
+      
+      // Salary patterns for Bulgarian job sites (handle both comma and space separators)
+      const patterns = [
+        // "4 500 - 9 500 лв" or "4,500 - 9,500 BGN net monthly"
+        /(\d+[\s,\d]*)\s*[-–]\s*(\d+[\s,\d]*)\s*(BGN|лв|лева)\s*(net|gross|netto|brutto|месечно|monthly)?/gi,
+        // "Net Monthly: 4500-9500 BGN" 
+        /(net|gross|netto|brutto|месечно|monthly)?\s*:?\s*(\d+[\s,\d]*)\s*[-–]\s*(\d+[\s,\d]*)\s*(BGN|лв|лева)/gi,
+        // "От 5000 до 8000 лв"
+        /от\s+(\d+[\s,\d]*)\s+до\s+(\d+[\s,\d]*)\s*(лв|лева|BGN)/gi,
+        // "Up to 9500 BGN"
+        /up\s+to\s+(\d+[\s,\d]*)\s*(BGN|лв|лева)/gi,
+        // "до 9500 лв"
+        /до\s+(\d+[\s,\d]*)\s*(лв|лева|BGN)/gi,
+      ];
+
+      for (const pattern of patterns) {
+        const match = pattern.exec(text);
+        if (match) {
+          let salaryMin: number | undefined;
+          let salaryMax: number | undefined;
+          let currency = 'BGN';
+
+          // Different pattern structures
+          if (match[1] && match[2] && match[3]) {
+            // Range pattern: min - max currency
+            salaryMin = parseInt(match[1].replace(/[\s,]/g, ''));
+            salaryMax = parseInt(match[2].replace(/[\s,]/g, ''));
+            
+            // Normalize currency
+            if (match[3].toLowerCase().includes('лв') || match[3].toLowerCase().includes('лева')) {
+              currency = 'BGN';
+            } else {
+              currency = match[3].toUpperCase();
+            }
+          } else if (match[2] && match[3] && match[4]) {
+            // Range pattern with prefix: prefix min - max currency
+            salaryMin = parseInt(match[2].replace(/[\s,]/g, ''));
+            salaryMax = parseInt(match[3].replace(/[\s,]/g, ''));
+            currency = match[4].includes('лв') ? 'BGN' : match[4].toUpperCase();
+          } else if (match[1] && match[2]) {
+            // Single value pattern: up to X currency
+            if (text.toLowerCase().includes('up to') || text.toLowerCase().includes('до')) {
+              salaryMax = parseInt(match[1].replace(/[\s,]/g, ''));
+              currency = match[2].includes('лв') ? 'BGN' : match[2].toUpperCase();
+            }
+          }
+
+          if (salaryMin || salaryMax) {
+            this.logger.log(`Extracted salary: ${salaryMin || 'N/A'} - ${salaryMax || 'N/A'} ${currency}`);
+            return { min: salaryMin, max: salaryMax, currency };
+          }
+        }
+      }
+
+      return undefined;
+    } catch (error) {
+      this.logger.warn('Error extracting salary information:', error.message);
+      return undefined;
     }
   }
 

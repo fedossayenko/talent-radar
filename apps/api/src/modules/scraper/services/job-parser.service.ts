@@ -137,7 +137,7 @@ export class JobParserService {
   /**
    * Extracts company URLs from job details page HTML
    */
-  extractCompanyUrls(html: string): { profileUrl?: string; website?: string } {
+  extractCompanyUrls(html: string, companyName?: string): { profileUrl?: string; website?: string } {
     try {
       const $ = cheerio.load(html);
       
@@ -150,13 +150,42 @@ export class JobParserService {
       companyLinks.each((_, element) => {
         const href = $(element).attr('href');
         if (href && href.includes('/company/') && !profileUrl) {
-          // Only accept company URLs with specific company identifiers (not generic /company/)
-          const companyUrlPattern = /\/company\/[a-zA-Z0-9\-_]+/;
-          if (companyUrlPattern.test(href) && !href.endsWith('/company/')) {
+          // Only accept actual company profile URLs, not job category URLs
+          // Valid: /company/droxic/, /company/gamito, https://dev.bg/company/technologica/
+          // Invalid: /company/jobs/..., /company/jobads/..., /company/categories/...
+          
+          // Extract the path part for pattern matching
+          let pathToCheck = href;
+          if (href.startsWith('https://dev.bg')) {
+            pathToCheck = href.replace('https://dev.bg', '');
+          }
+          
+          const companyUrlPattern = /^\/company\/([a-zA-Z0-9\-_]+)\/?$/;
+          const match = pathToCheck.match(companyUrlPattern);
+          
+          if (match && !href.includes('/jobs/') && !href.includes('/jobads/') && !href.includes('/categories/')) {
             profileUrl = href.startsWith('http') ? href : `https://dev.bg${href}`;
+            this.logger.log(`Found valid company profile URL: ${profileUrl}`);
+          } else {
+            this.logger.debug(`Skipped invalid company URL: ${href}`);
           }
         }
       });
+      
+      // Fallback: Try to construct company profile URL from company name if not found
+      if (!profileUrl && companyName) {
+        const normalizedCompanyName = companyName
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+        
+        if (normalizedCompanyName) {
+          const constructedUrl = `https://dev.bg/company/${normalizedCompanyName}/`;
+          this.logger.log(`Constructed potential company profile URL: ${constructedUrl}`);
+          profileUrl = constructedUrl;
+        }
+      }
       
       // Look for external company website links
       let website: string | undefined;
