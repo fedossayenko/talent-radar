@@ -161,6 +161,8 @@ export class ScraperProcessor implements OnModuleInit {
         return {
           success: false,
           vacancyData: null,
+          cleanedContentSentToAi: '',
+          rawAiResponse: '',
           metadata: {
             contentExtraction: null as any,
             htmlCleaning: null as any,
