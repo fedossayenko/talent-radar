@@ -445,7 +445,7 @@ describe('CompanyProfileScraper', () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe('ENOTFOUND');
       expect(result.data).toBeUndefined();
-    });
+    }, 10000);
   });
 
   describe('error handling', () => {

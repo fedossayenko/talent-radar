@@ -1,3 +1,5 @@
+import { ParsedVacancy } from './vacancy'
+
 // Company scoring and analysis types
 export interface ScoringFactors {
   // Developer Experience (0-10)
@@ -112,6 +114,24 @@ export interface CompanyAnalysis {
   updatedAt: string
 }
 
+export interface SalaryRange {
+  min?: number
+  max?: number
+  currency?: string
+}
+
+export interface ContactInfo {
+  phone?: string | null
+  email?: string | null
+  address?: string | null
+}
+
+export interface CompanyDetails {
+  companyType?: string | null
+  services?: string[] | null
+  businessLicense?: string | null
+}
+
 export interface Company {
   id: string
   name: string
@@ -141,6 +161,12 @@ export interface CompanyWithLatestAnalysis extends Company {
   latestAnalysis: CompanyAnalysis | null
   activeVacanciesCount: number
   hasAnalysis: boolean
+  
+  // Additional properties for detailed company view
+  salaryRange?: SalaryRange | null
+  vacancies?: ParsedVacancy[] | null
+  contactInfo?: ContactInfo | null
+  companyDetails?: CompanyDetails | null
 }
 
 export interface CompanyFilters {

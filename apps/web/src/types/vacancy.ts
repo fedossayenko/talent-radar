@@ -73,10 +73,11 @@ export interface VacancyFilters {
 }
 
 // Parsed types for frontend display
-export interface ParsedVacancy extends Omit<Vacancy, 'technologies' | 'responsibilities' | 'benefits'> {
+export interface ParsedVacancy extends Omit<Vacancy, 'technologies' | 'responsibilities' | 'benefits' | 'requirements'> {
   technologies: string[]
   responsibilities: string[]
   benefits: string[]
+  requirements: string[]
   formattedSalary?: string
   relativeTime: string
   qualityLevel: 'high' | 'medium' | 'low'

@@ -58,12 +58,14 @@ export function parseVacancy(vacancy: Vacancy): ParsedVacancy {
   const technologies = safeJsonParse<string>(vacancy.technologies)
   const responsibilities = safeJsonParse<string>(vacancy.responsibilities)
   const benefits = safeJsonParse<string>(vacancy.benefits)
+  const requirements = safeJsonParse<string>(vacancy.requirements)
   
   return {
     ...vacancy,
     technologies,
     responsibilities,
     benefits,
+    requirements,
     formattedSalary: formatSalary(vacancy.salaryMin, vacancy.salaryMax, vacancy.currency),
     relativeTime: formatDistanceToNow(parseISO(vacancy.updatedAt), { addSuffix: true }),
     qualityLevel: getQualityLevel(vacancy.extractionConfidence),

@@ -411,7 +411,7 @@ export default function CompanyDetailPage() {
           {company.vacancies && company.vacancies.length > 0 && (
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Current Job Openings</h2>
-              {company.vacancies.map((vacancy, index) => (
+              {company.vacancies.map((vacancy) => (
                 <div key={vacancy.id} className="mb-6 p-4 bg-gray-50 rounded-lg">
                   <div className="flex justify-between items-start mb-3">
                     <h3 className="font-semibold text-gray-900">{vacancy.title}</h3>
@@ -435,7 +435,7 @@ export default function CompanyDetailPage() {
                       <div>
                         <h4 className="font-medium text-gray-700 mb-2">Requirements</h4>
                         <div className="space-y-1">
-                          {vacancy.requirements.slice(0, 3).map((req, reqIndex) => (
+                          {vacancy.requirements.slice(0, 3).map((req: string, reqIndex: number) => (
                             <div key={reqIndex} className="flex items-start gap-2">
                               <span className="text-blue-500 text-xs mt-1">▪</span>
                               <span className="text-gray-600 text-sm">{req}</span>
@@ -449,7 +449,7 @@ export default function CompanyDetailPage() {
                       <div>
                         <h4 className="font-medium text-gray-700 mb-2">Benefits</h4>
                         <div className="space-y-1">
-                          {vacancy.benefits.slice(0, 3).map((benefit, benefitIndex) => (
+                          {vacancy.benefits.slice(0, 3).map((benefit: string, benefitIndex: number) => (
                             <div key={benefitIndex} className="flex items-start gap-2">
                               <span className="text-green-500 text-xs mt-1">✓</span>
                               <span className="text-gray-600 text-sm">{benefit}</span>
@@ -560,7 +560,7 @@ export default function CompanyDetailPage() {
                   <div>
                     <span className="text-gray-600 block mb-2">Services</span>
                     <div className="flex flex-wrap gap-1">
-                      {company.companyDetails.services.map((service, index) => (
+                      {company.companyDetails.services.map((service: string, index: number) => (
                         <span
                           key={index}
                           className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
