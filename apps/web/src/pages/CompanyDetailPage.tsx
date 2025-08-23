@@ -228,6 +228,21 @@ export default function CompanyDetailPage() {
             </p>
           </div>
         )}
+
+        {/* Salary Range */}
+        {company.salaryRange && (
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <div className="bg-green-50 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-green-600 font-semibold">💰 Salary Range</span>
+              </div>
+              <div className="text-2xl font-bold text-green-700">
+                {company.salaryRange.min?.toLocaleString()} - {company.salaryRange.max?.toLocaleString()} {company.salaryRange.currency}
+              </div>
+              <div className="text-sm text-gray-600">Monthly (based on current openings)</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Main Content */}
@@ -307,7 +322,7 @@ export default function CompanyDetailPage() {
           )}
 
           {/* Strengths */}
-          {analysis?.scoreStrengths && analysis.scoreStrengths.length > 0 && (
+          {analysis?.scoreStrengths && Array.isArray(analysis.scoreStrengths) && analysis.scoreStrengths.length > 0 && (
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center gap-2 mb-4">
                 <SparklesIcon className="w-5 h-5 text-green-500" />
@@ -325,7 +340,7 @@ export default function CompanyDetailPage() {
           )}
 
           {/* Areas for Improvement */}
-          {analysis?.scoreConcerns && analysis.scoreConcerns.length > 0 && (
+          {analysis?.scoreConcerns && Array.isArray(analysis.scoreConcerns) && analysis.scoreConcerns.length > 0 && (
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center gap-2 mb-4">
                 <ExclamationTriangleIcon className="w-5 h-5 text-yellow-500" />
@@ -343,7 +358,7 @@ export default function CompanyDetailPage() {
           )}
 
           {/* Recommendations */}
-          {analysis?.scoreRecommendations && analysis.scoreRecommendations.length > 0 && (
+          {analysis?.scoreRecommendations && Array.isArray(analysis.scoreRecommendations) && analysis.scoreRecommendations.length > 0 && (
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <div className="flex items-center gap-2 mb-4">
                 <LightBulbIcon className="w-5 h-5 text-blue-500" />
@@ -361,7 +376,7 @@ export default function CompanyDetailPage() {
           )}
 
           {/* Tech Stack */}
-          {analysis?.techStack && analysis.techStack.length > 0 && (
+          {analysis?.techStack && Array.isArray(analysis.techStack) && analysis.techStack.length > 0 && (
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Technology Stack</h2>
               <div className="flex flex-wrap gap-2">
@@ -377,8 +392,8 @@ export default function CompanyDetailPage() {
             </div>
           )}
 
-          {/* Benefits */}
-          {analysis?.benefits && analysis.benefits.length > 0 && (
+          {/* Benefits from Analysis */}
+          {analysis?.benefits && Array.isArray(analysis.benefits) && analysis.benefits.length > 0 && (
             <div className="bg-white rounded-lg shadow-sm border p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Benefits & Perks</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -389,6 +404,63 @@ export default function CompanyDetailPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Job Benefits & Requirements from Current Vacancies */}
+          {company.vacancies && company.vacancies.length > 0 && (
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Current Job Openings</h2>
+              {company.vacancies.map((vacancy, index) => (
+                <div key={vacancy.id} className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <div className="flex justify-between items-start mb-3">
+                    <h3 className="font-semibold text-gray-900">{vacancy.title}</h3>
+                    {(vacancy.salaryMin || vacancy.salaryMax) && (
+                      <div className="text-right">
+                        <div className="text-green-600 font-semibold">
+                          {vacancy.salaryMin && vacancy.salaryMax 
+                            ? `${vacancy.salaryMin.toLocaleString()} - ${vacancy.salaryMax.toLocaleString()}`
+                            : vacancy.salaryMax 
+                              ? `up to ${vacancy.salaryMax.toLocaleString()}`
+                              : `from ${vacancy.salaryMin?.toLocaleString()}`
+                          } {vacancy.currency || 'BGN'}
+                        </div>
+                        <div className="text-xs text-gray-500">Monthly</div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {vacancy.requirements && vacancy.requirements.length > 0 && (
+                      <div>
+                        <h4 className="font-medium text-gray-700 mb-2">Requirements</h4>
+                        <div className="space-y-1">
+                          {vacancy.requirements.slice(0, 3).map((req, reqIndex) => (
+                            <div key={reqIndex} className="flex items-start gap-2">
+                              <span className="text-blue-500 text-xs mt-1">▪</span>
+                              <span className="text-gray-600 text-sm">{req}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {vacancy.benefits && vacancy.benefits.length > 0 && (
+                      <div>
+                        <h4 className="font-medium text-gray-700 mb-2">Benefits</h4>
+                        <div className="space-y-1">
+                          {vacancy.benefits.slice(0, 3).map((benefit, benefitIndex) => (
+                            <div key={benefitIndex} className="flex items-start gap-2">
+                              <span className="text-green-500 text-xs mt-1">✓</span>
+                              <span className="text-gray-600 text-sm">{benefit}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -435,6 +507,79 @@ export default function CompanyDetailPage() {
               )}
             </div>
           </div>
+
+          {/* Contact Information */}
+          {company.contactInfo && (company.contactInfo.phone || company.contactInfo.email || company.contactInfo.address) && (
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Contact Information</h3>
+              <div className="space-y-3">
+                {company.contactInfo.phone && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-blue-500">📞</span>
+                    <a
+                      href={`tel:${company.contactInfo.phone}`}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      {company.contactInfo.phone}
+                    </a>
+                  </div>
+                )}
+                {company.contactInfo.email && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-blue-500">✉️</span>
+                    <a
+                      href={`mailto:${company.contactInfo.email}`}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      {company.contactInfo.email}
+                    </a>
+                  </div>
+                )}
+                {company.contactInfo.address && (
+                  <div className="flex items-start gap-3">
+                    <span className="text-blue-500 mt-1">📍</span>
+                    <span className="text-gray-700">{company.contactInfo.address}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Company Type & Services */}
+          {company.companyDetails && (company.companyDetails.companyType || company.companyDetails.services) && (
+            <div className="bg-white rounded-lg shadow-sm border p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Company Details</h3>
+              <div className="space-y-3">
+                {company.companyDetails.companyType && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">Type</span>
+                    <span className="font-medium capitalize">{company.companyDetails.companyType}</span>
+                  </div>
+                )}
+                {company.companyDetails.services && company.companyDetails.services.length > 0 && (
+                  <div>
+                    <span className="text-gray-600 block mb-2">Services</span>
+                    <div className="flex flex-wrap gap-1">
+                      {company.companyDetails.services.map((service, index) => (
+                        <span
+                          key={index}
+                          className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full"
+                        >
+                          {service}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {company.companyDetails.businessLicense && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600">License</span>
+                    <span className="font-medium">#{company.companyDetails.businessLicense}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* External Links */}
           <div className="bg-white rounded-lg shadow-sm border p-6">
