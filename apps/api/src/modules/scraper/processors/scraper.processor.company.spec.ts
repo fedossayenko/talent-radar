@@ -436,7 +436,7 @@ describe('ScraperProcessor - Company Analysis', () => {
       await processor.handleCompanyAnalysis(mockJob);
 
       // Assert
-      expect(companyService.createOrUpdateAnalysis).toHaveBeenCalledWith({
+      expect(companyService.createOrUpdateAnalysis).toHaveBeenCalledWith(expect.objectContaining({
         companyId: mockCompanyAnalysisJobData.companyId,
         analysisSource: "ai_generated",
         recommendationScore: mockAnalysisResult.recommendationScore,
@@ -464,7 +464,11 @@ describe('ScraperProcessor - Company Analysis', () => {
           structuredData: null,
           enhancedAnalysis: false,
         }),
-      });
+        // New fields from enhanced AI processing traceability
+        rawAiResponse: 'Mock AI raw response',
+        cleanedContentForAi: mockScrapingResult.data?.rawContent,
+        aiProcessingSteps: expect.stringContaining('processingSteps')
+      }));
     });
 
     it('should skip company updates when analysis has no basic info', async () => {

@@ -11,6 +11,7 @@ describe('CompanyProfileScraper', () => {
   let service: CompanyProfileScraper;
   let axiosHeadSpy: jest.SpyInstance;
   let axiosGetSpy: jest.SpyInstance;
+  let fetchPageWithBrowserSpy: jest.SpyInstance;
 
   beforeEach(async () => {
     // Mock axios.head to prevent real network requests in tests
@@ -155,12 +156,19 @@ describe('CompanyProfileScraper', () => {
     }).compile();
 
     service = module.get<CompanyProfileScraper>(CompanyProfileScraper);
+    
+    // Mock the private fetchPageWithBrowser method to prevent real browser automation
+    fetchPageWithBrowserSpy = jest.spyOn(service as any, 'fetchPageWithBrowser').mockImplementation(async (url: string) => {
+      // Simulate browser fallback failure
+      throw new Error('Browser automation failed');
+    });
   });
 
   afterEach(() => {
     jest.clearAllMocks();
     axiosHeadSpy.mockRestore();
     axiosGetSpy.mockRestore();
+    fetchPageWithBrowserSpy.mockRestore();
   });
 
   describe('validateCompanyUrl', () => {
@@ -443,7 +451,7 @@ describe('CompanyProfileScraper', () => {
 
       // Assert
       expect(result.success).toBe(false);
-      expect(result.error).toBe('ENOTFOUND');
+      expect(result.error).toBe('Browser automation failed');
       expect(result.data).toBeUndefined();
     }, 10000);
   });
