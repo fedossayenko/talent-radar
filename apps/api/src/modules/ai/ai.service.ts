@@ -262,6 +262,93 @@ export class AiService {
   }
 
   /**
+   * Extract structured vacancy data with raw response - Enhanced version for pipeline traceability
+   */
+  async extractVacancyDataWithRawResponse(
+    content: string,
+    sourceUrl: string,
+    options: { skipCache?: boolean } = {},
+  ): Promise<{ result: VacancyExtractionResult | null; rawResponse: string }> {
+    try {
+      // Generate content hash for caching using unified utility
+      const contentHash = HashingUtil.generateContentHash({
+        url: sourceUrl,
+        content: content,
+        useUrlHashing: this.config.contentHashing.enableUrlHashing,
+        useContentHashing: this.config.contentHashing.enableContentHashing,
+        cleanBeforeHash: this.config.contentHashing.contentCleaningBeforeHash,
+      });
+
+      // Check cache first
+      if (!options.skipCache && this.config.enableCaching) {
+        const cachedResult = await this.getCachedExtraction(contentHash);
+        if (cachedResult) {
+          this.logger.log(`Cache hit for content hash: ${contentHash}`);
+          // Return cached result with empty raw response (not stored in cache)
+          return { result: cachedResult, rawResponse: '' };
+        }
+      }
+
+      // Clean and optimize content
+      const optimizedContent = await this.optimizeContentForExtraction(content, sourceUrl);
+      
+      // Prepare prompt
+      const prompt = this.config.prompts.vacancyExtraction.template
+        .replace('{content}', optimizedContent)
+        .replace('{sourceUrl}', sourceUrl);
+
+      // Make API call
+      const apiCall: any = {
+        model: this.config.models.scraping.vacancy,
+        messages: [
+          {
+            role: 'user' as const,
+            content: prompt,
+          },
+        ],
+        max_completion_tokens: this.config.prompts.vacancyExtraction.maxTokens,
+      };
+
+      // Model-specific configurations
+      const isGpt5Nano = this.config.models.scraping.vacancy.includes('gpt-5-nano');
+      
+      if (!isGpt5Nano) {
+        // Standard models support temperature and json_object format
+        apiCall.temperature = this.config.prompts.vacancyExtraction.temperature;
+        apiCall.response_format = { type: 'json_object' as const };
+      }
+      // GPT-5 Nano uses default temperature and doesn't support structured response format
+
+      const response = await this.callOpenAiWithLogging('extractVacancyData', apiCall);
+      const rawResponse = response.choices[0]?.message?.content || '';
+
+      const extractedData = this.parseExtractionResponse(rawResponse, isGpt5Nano);
+      
+      if (!extractedData) {
+        this.logger.warn('Failed to parse AI extraction response');
+        return { result: null, rawResponse };
+      }
+
+      // Validate quality threshold
+      if (extractedData.confidenceScore < 70) {
+        this.logger.warn(`Low confidence extraction (${extractedData.confidenceScore}%) for URL: ${sourceUrl}`);
+      }
+
+      // Cache the result (only the structured data)
+      if (this.config.enableCaching) {
+        await this.cacheExtraction(contentHash, extractedData);
+      }
+
+      this.logger.log(`Successfully extracted vacancy data with ${extractedData.confidenceScore}% confidence`);
+      return { result: extractedData, rawResponse };
+
+    } catch (error) {
+      this.logger.error(`Failed to extract vacancy data from ${sourceUrl}:`, error.message);
+      return { result: null, rawResponse: '' };
+    }
+  }
+
+  /**
    * Analyze company profile data from dev.bg
    */
   async analyzeCompanyProfile(
@@ -412,6 +499,166 @@ export class AiService {
     } catch (error) {
       this.logger.error(`Failed to analyze company website from ${sourceUrl}:`, error.message);
       return null;
+    }
+  }
+
+  /**
+   * Analyze company profile with raw response - Enhanced version for pipeline traceability
+   */
+  async analyzeCompanyProfileWithRawResponse(
+    content: string,
+    sourceUrl: string,
+    options: { skipCache?: boolean } = {},
+  ): Promise<{ result: CompanyProfileAnalysisResult | null; rawResponse: string }> {
+    try {
+      // Generate content hash for caching
+      const contentHash = HashingUtil.generateContentHash({
+        url: sourceUrl,
+        content: content,
+        useUrlHashing: this.config.contentHashing.enableUrlHashing,
+        useContentHashing: this.config.contentHashing.enableContentHashing,
+        cleanBeforeHash: this.config.contentHashing.contentCleaningBeforeHash,
+      });
+
+      // Check cache first
+      if (!options.skipCache && this.config.enableCaching) {
+        const cachedResult = await this.getCachedCompanyAnalysis(contentHash, 'profile');
+        if (cachedResult) {
+          this.logger.log(`Cache hit for company profile analysis: ${contentHash}`);
+          // Return cached result with empty raw response (not stored in cache)
+          return { result: cachedResult, rawResponse: '' };
+        }
+      }
+
+      // Clean and optimize content
+      const optimizedContent = await this.optimizeContentForExtraction(content, sourceUrl);
+      
+      // Prepare prompt
+      const prompt = this.config.prompts.companyProfile.template
+        .replace('{content}', optimizedContent)
+        .replace('{sourceUrl}', sourceUrl);
+
+      // Make API call
+      const apiCall: any = {
+        model: this.config.models.scraping.vacancy,
+        messages: [
+          {
+            role: 'user' as const,
+            content: prompt,
+          },
+        ],
+        max_completion_tokens: this.config.prompts.companyProfile.maxTokens,
+      };
+
+      // Model-specific configurations
+      const isGpt5Nano = this.config.models.scraping.vacancy.includes('gpt-5-nano');
+      
+      if (!isGpt5Nano) {
+        apiCall.temperature = this.config.prompts.companyProfile.temperature;
+        apiCall.response_format = { type: 'json_object' as const };
+      }
+
+      const response = await this.callOpenAiWithLogging('analyzeCompanyProfile', apiCall);
+      const rawResponse = response.choices[0]?.message?.content || '';
+
+      const analysisResult = this.parseCompanyAnalysisResponse(rawResponse, isGpt5Nano);
+      
+      if (!analysisResult) {
+        this.logger.warn('Failed to parse company profile analysis response');
+        return { result: null, rawResponse };
+      }
+
+      // Cache the result (only the structured data)
+      if (this.config.enableCaching) {
+        await this.cacheCompanyAnalysis(contentHash, 'profile', analysisResult);
+      }
+
+      this.logger.log(`Successfully analyzed company profile with ${analysisResult.confidenceScore}% confidence`);
+      return { result: analysisResult, rawResponse };
+
+    } catch (error) {
+      this.logger.error(`Failed to analyze company profile from ${sourceUrl}:`, error.message);
+      return { result: null, rawResponse: '' };
+    }
+  }
+
+  /**
+   * Analyze company website with raw response - Enhanced version for pipeline traceability
+   */
+  async analyzeCompanyWebsiteWithRawResponse(
+    content: string,
+    sourceUrl: string,
+    options: { skipCache?: boolean } = {},
+  ): Promise<{ result: CompanyWebsiteAnalysisResult | null; rawResponse: string }> {
+    try {
+      // Generate content hash for caching
+      const contentHash = HashingUtil.generateContentHash({
+        url: sourceUrl,
+        content: content,
+        useUrlHashing: this.config.contentHashing.enableUrlHashing,
+        useContentHashing: this.config.contentHashing.enableContentHashing,
+        cleanBeforeHash: this.config.contentHashing.contentCleaningBeforeHash,
+      });
+
+      // Check cache first
+      if (!options.skipCache && this.config.enableCaching) {
+        const cachedResult = await this.getCachedCompanyAnalysis(contentHash, 'website');
+        if (cachedResult) {
+          this.logger.log(`Cache hit for company website analysis: ${contentHash}`);
+          // Return cached result with empty raw response (not stored in cache)
+          return { result: cachedResult, rawResponse: '' };
+        }
+      }
+
+      // Clean and optimize content
+      const optimizedContent = await this.optimizeContentForExtraction(content, sourceUrl);
+      
+      // Prepare prompt
+      const prompt = this.config.prompts.companyWebsite.template
+        .replace('{content}', optimizedContent)
+        .replace('{sourceUrl}', sourceUrl);
+
+      // Make API call
+      const apiCall: any = {
+        model: this.config.models.scraping.vacancy,
+        messages: [
+          {
+            role: 'user' as const,
+            content: prompt,
+          },
+        ],
+        max_completion_tokens: this.config.prompts.companyWebsite.maxTokens,
+      };
+
+      // Model-specific configurations
+      const isGpt5Nano = this.config.models.scraping.vacancy.includes('gpt-5-nano');
+      
+      if (!isGpt5Nano) {
+        apiCall.temperature = this.config.prompts.companyWebsite.temperature;
+        apiCall.response_format = { type: 'json_object' as const };
+      }
+
+      const response = await this.callOpenAiWithLogging('analyzeCompanyWebsite', apiCall);
+      const rawResponse = response.choices[0]?.message?.content || '';
+
+      const analysisResult = this.parseCompanyAnalysisResponse(rawResponse, isGpt5Nano, 'website');
+      
+      if (!analysisResult) {
+        this.logger.warn('Failed to parse company website analysis response');
+        return { result: null, rawResponse };
+      }
+
+      // Cache the result (only the structured data)
+      if (this.config.enableCaching) {
+        await this.cacheCompanyAnalysis(contentHash, 'website', analysisResult);
+      }
+
+      this.logger.log(`Successfully analyzed company website with ${analysisResult.confidenceScore}% confidence`);
+      return { result: analysisResult, rawResponse };
+
+    } catch (error) {
+      this.logger.error(`Failed to analyze company website from ${sourceUrl}:`, error.message);
+      return { result: null, rawResponse: '' };
     }
   }
 

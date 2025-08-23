@@ -145,6 +145,7 @@ export class ScraperService {
       let rawHtml = '';
       let companyProfileUrl: string | undefined;
       let companyWebsite: string | undefined;
+      let salaryInfo: { min?: number; max?: number; currency?: string } | undefined;
 
       if (jobListing.url) {
         try {
@@ -153,6 +154,7 @@ export class ScraperService {
           rawHtml = jobDetails.rawHtml || '';
           companyProfileUrl = jobDetails.companyProfileUrl;
           companyWebsite = jobDetails.companyWebsite;
+          salaryInfo = jobDetails.salaryInfo;
           // Note: requirements from job details are not currently used, 
           // using technologies from job listing instead
         } catch (error) {
@@ -160,14 +162,16 @@ export class ScraperService {
         }
       }
 
-      // Prepare vacancy data
+      // Prepare vacancy data with enhanced salary information
       const vacancyData = {
         title: jobListing.title,
         description,
         requirements: JSON.stringify(jobListing.technologies),
         location: jobListing.location,
-        salaryMin: this.parseSalaryMin(jobListing.salaryRange),
-        salaryMax: this.parseSalaryMax(jobListing.salaryRange),
+        // Use extracted salary info if available, fallback to original parsing
+        salaryMin: salaryInfo?.min || this.parseSalaryMin(jobListing.salaryRange),
+        salaryMax: salaryInfo?.max || this.parseSalaryMax(jobListing.salaryRange),
+        currency: salaryInfo?.currency || null,
         experienceLevel: this.extractExperienceLevel(jobListing.title),
         employmentType: this.mapWorkModelToEmploymentType(jobListing.workModel),
         companyId: company.id,

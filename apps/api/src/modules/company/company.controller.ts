@@ -41,6 +41,7 @@ export class CompanyController {
     return this.companyService.update(id, updateData);
   }
 
+  @Public()
   @Post(':id/analyze')
   @ApiOperation({ summary: 'Analyze company with AI' })
   @ApiQuery({ name: 'force', required: false, type: Boolean, description: 'Force re-scraping bypassing TTL cache' })
