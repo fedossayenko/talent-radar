@@ -111,6 +111,8 @@ describe('ScraperProcessor - Company Analysis', () => {
             isConfigured: jest.fn(),
             analyzeCompanyProfile: jest.fn(),
             analyzeCompanyWebsite: jest.fn(),
+            analyzeCompanyProfileWithRawResponse: jest.fn(),
+            analyzeCompanyWebsiteWithRawResponse: jest.fn(),
           },
         },
         {
@@ -188,7 +190,10 @@ describe('ScraperProcessor - Company Analysis', () => {
       aiService.isConfigured.mockReturnValue(true);
       companyProfileScraper.scrapeDevBgCompanyProfile.mockResolvedValue(mockScrapingResult);
       companySourceService.saveCompanySource.mockResolvedValue({} as any);
-      aiService.analyzeCompanyProfile.mockResolvedValue(mockAnalysisResult);
+      aiService.analyzeCompanyProfileWithRawResponse.mockResolvedValue({
+        result: mockAnalysisResult,
+        rawResponse: 'Mock AI raw response'
+      });
       companyService.update.mockResolvedValue({} as any);
       companyService.createOrUpdateAnalysis.mockResolvedValue({} as any);
 
@@ -211,7 +216,7 @@ describe('ScraperProcessor - Company Analysis', () => {
         scrapedContent: mockScrapingResult.data?.rawContent,
         isValid: true,
       });
-      expect(aiService.analyzeCompanyProfile).toHaveBeenCalledWith(
+      expect(aiService.analyzeCompanyProfileWithRawResponse).toHaveBeenCalledWith(
         mockScrapingResult.data?.rawContent,
         mockCompanyAnalysisJobData.sourceUrl
       );
@@ -250,7 +255,10 @@ describe('ScraperProcessor - Company Analysis', () => {
       aiService.isConfigured.mockReturnValue(true);
       companyProfileScraper.scrapeCompanyWebsite.mockResolvedValue(mockScrapingResult);
       companySourceService.saveCompanySource.mockResolvedValue({} as any);
-      aiService.analyzeCompanyWebsite.mockResolvedValue(mockAnalysisResult);
+      aiService.analyzeCompanyWebsiteWithRawResponse.mockResolvedValue({
+        result: mockAnalysisResult,
+        rawResponse: 'Mock AI raw response'
+      });
       companyService.update.mockResolvedValue({} as any);
       companyService.createOrUpdateAnalysis.mockResolvedValue({} as any);
 
@@ -260,7 +268,7 @@ describe('ScraperProcessor - Company Analysis', () => {
       // Assert
       expect(result.success).toBe(true);
       expect(companyProfileScraper.scrapeCompanyWebsite).toHaveBeenCalledWith(websiteJobData.sourceUrl);
-      expect(aiService.analyzeCompanyWebsite).toHaveBeenCalledWith(
+      expect(aiService.analyzeCompanyWebsiteWithRawResponse).toHaveBeenCalledWith(
         mockScrapingResult.data?.rawContent,
         websiteJobData.sourceUrl
       );
@@ -282,7 +290,7 @@ describe('ScraperProcessor - Company Analysis', () => {
 
       // Verify no scraping or analysis was performed
       expect(companyProfileScraper.scrapeDevBgCompanyProfile).not.toHaveBeenCalled();
-      expect(aiService.analyzeCompanyProfile).not.toHaveBeenCalled();
+      expect(aiService.analyzeCompanyProfileWithRawResponse).not.toHaveBeenCalled();
     });
 
     it('should handle scraping failure and mark source as invalid', async () => {
@@ -317,7 +325,7 @@ describe('ScraperProcessor - Company Analysis', () => {
       );
 
       // Verify no analysis was performed
-      expect(aiService.analyzeCompanyProfile).not.toHaveBeenCalled();
+      expect(aiService.analyzeCompanyProfileWithRawResponse).not.toHaveBeenCalled();
       expect(companyService.createOrUpdateAnalysis).not.toHaveBeenCalled();
     });
 
@@ -327,7 +335,10 @@ describe('ScraperProcessor - Company Analysis', () => {
       aiService.isConfigured.mockReturnValue(true);
       companyProfileScraper.scrapeDevBgCompanyProfile.mockResolvedValue(mockScrapingResult);
       companySourceService.saveCompanySource.mockResolvedValue({} as any);
-      aiService.analyzeCompanyProfile.mockResolvedValue(null);
+      aiService.analyzeCompanyProfileWithRawResponse.mockResolvedValue({
+        result: null,
+        rawResponse: 'Mock AI raw response'
+      });
 
       // Act
       const result = await processor.handleCompanyAnalysis(mockJob);
@@ -341,7 +352,7 @@ describe('ScraperProcessor - Company Analysis', () => {
       // Verify scraping was performed but analysis failed
       expect(companyProfileScraper.scrapeDevBgCompanyProfile).toHaveBeenCalled();
       expect(companySourceService.saveCompanySource).toHaveBeenCalled();
-      expect(aiService.analyzeCompanyProfile).toHaveBeenCalled();
+      expect(aiService.analyzeCompanyProfileWithRawResponse).toHaveBeenCalled();
 
       // Verify no analysis was saved
       expect(companyService.createOrUpdateAnalysis).not.toHaveBeenCalled();
@@ -386,7 +397,7 @@ describe('ScraperProcessor - Company Analysis', () => {
       aiService.isConfigured.mockReturnValue(true);
       companyProfileScraper.scrapeDevBgCompanyProfile.mockResolvedValue(mockScrapingResult);
       companySourceService.saveCompanySource.mockResolvedValue({} as any);
-      aiService.analyzeCompanyProfile.mockRejectedValue(new Error('OpenAI API error'));
+      aiService.analyzeCompanyProfileWithRawResponse.mockRejectedValue(new Error('OpenAI API error'));
 
       // Act & Assert
       await expect(processor.handleCompanyAnalysis(mockJob)).rejects.toThrow('OpenAI API error');
@@ -398,7 +409,10 @@ describe('ScraperProcessor - Company Analysis', () => {
       aiService.isConfigured.mockReturnValue(true);
       companyProfileScraper.scrapeDevBgCompanyProfile.mockResolvedValue(mockScrapingResult);
       companySourceService.saveCompanySource.mockResolvedValue({} as any);
-      aiService.analyzeCompanyProfile.mockResolvedValue(mockAnalysisResult);
+      aiService.analyzeCompanyProfileWithRawResponse.mockResolvedValue({
+        result: mockAnalysisResult,
+        rawResponse: 'Mock AI raw response'
+      });
       companyService.update.mockRejectedValue(new Error('Database connection failed'));
 
       // Act & Assert
@@ -411,7 +425,10 @@ describe('ScraperProcessor - Company Analysis', () => {
       aiService.isConfigured.mockReturnValue(true);
       companyProfileScraper.scrapeDevBgCompanyProfile.mockResolvedValue(mockScrapingResult);
       companySourceService.saveCompanySource.mockResolvedValue({} as any);
-      aiService.analyzeCompanyProfile.mockResolvedValue(mockAnalysisResult);
+      aiService.analyzeCompanyProfileWithRawResponse.mockResolvedValue({
+        result: mockAnalysisResult,
+        rawResponse: 'Mock AI raw response'
+      });
       companyService.update.mockResolvedValue({} as any);
       companyService.createOrUpdateAnalysis.mockResolvedValue({} as any);
 
@@ -525,7 +542,10 @@ describe('ScraperProcessor - Company Analysis', () => {
       aiService.isConfigured.mockReturnValue(true);
       companyProfileScraper.scrapeDevBgCompanyProfile.mockResolvedValue(emptyScrapingResult);
       companySourceService.saveCompanySource.mockResolvedValue({} as any);
-      aiService.analyzeCompanyProfile.mockResolvedValue(mockAnalysisResult);
+      aiService.analyzeCompanyProfileWithRawResponse.mockResolvedValue({
+        result: mockAnalysisResult,
+        rawResponse: 'Mock AI raw response'
+      });
       companyService.update.mockResolvedValue({} as any);
       companyService.createOrUpdateAnalysis.mockResolvedValue({} as any);
 
@@ -536,7 +556,7 @@ describe('ScraperProcessor - Company Analysis', () => {
       expect(result.success).toBe(true);
       
       // Verify AI was called with empty content
-      expect(aiService.analyzeCompanyProfile).toHaveBeenCalledWith('', mockCompanyAnalysisJobData.sourceUrl);
+      expect(aiService.analyzeCompanyProfileWithRawResponse).toHaveBeenCalledWith('', mockCompanyAnalysisJobData.sourceUrl);
     });
   });
 
@@ -547,7 +567,10 @@ describe('ScraperProcessor - Company Analysis', () => {
       aiService.isConfigured.mockReturnValue(true);
       companyProfileScraper.scrapeDevBgCompanyProfile.mockResolvedValue(mockScrapingResult);
       companySourceService.saveCompanySource.mockResolvedValue({} as any);
-      aiService.analyzeCompanyProfile.mockResolvedValue(mockAnalysisResult);
+      aiService.analyzeCompanyProfileWithRawResponse.mockResolvedValue({
+        result: mockAnalysisResult,
+        rawResponse: 'Mock AI raw response'
+      });
       companyService.update.mockResolvedValue({} as any);
       companyService.createOrUpdateAnalysis.mockRejectedValue(new Error('Analysis save failed'));
 
