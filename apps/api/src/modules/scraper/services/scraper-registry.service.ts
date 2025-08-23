@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { IJobScraper } from '../interfaces/job-scraper.interface';
-import { DevBgScraper } from '../scrapers/dev-bg-v2.scraper';
+import { DevBgScraper } from '../scrapers/dev-bg.scraper';
 import { JobsBgScraper } from '../scrapers/jobs-bg.scraper';
 
 /**

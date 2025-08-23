@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../../common/database/prisma.service';
 import { JobListing } from '../interfaces/job-scraper.interface';
 
-interface DuplicateMatch {
+export interface DuplicateMatch {
   existingId: string;
   matchScore: number;
   matchReasons: string[];
@@ -79,23 +79,23 @@ export class DuplicateDetectorService {
       }
     }
 
-    // Check by external ID in externalIds JSON field
-    if (jobListing.originalJobId && jobListing.sourceSite) {
-      const byExternalId = await this.prisma.vacancy.findFirst({
-        where: {
-          externalIds: {
-            path: [jobListing.sourceSite],
-            equals: jobListing.originalJobId,
-          },
-        },
-        select: { id: true },
-      });
-      
-      if (byExternalId) {
-        this.logger.debug(`Found exact match by external ID: ${byExternalId.id}`);
-        return byExternalId.id;
-      }
-    }
+    // Check by external ID in externalIds JSON field (TODO: Enable when externalIds field is added)
+    // if (jobListing.originalJobId && jobListing.sourceSite) {
+    //   const byExternalId = await this.prisma.vacancy.findFirst({
+    //     where: {
+    //       externalIds: {
+    //         path: [jobListing.sourceSite],
+    //         equals: jobListing.originalJobId,
+    //       },
+    //     },
+    //     select: { id: true },
+    //   });
+    //   
+    //   if (byExternalId) {
+    //     this.logger.debug(`Found exact match by external ID: ${byExternalId.id}`);
+    //     return byExternalId.id;
+    //   }
+    // }
 
     return null;
   }
@@ -122,21 +122,21 @@ export class DuplicateDetectorService {
       updatedAt: new Date(),
     };
 
-    // Merge external IDs
-    const externalIds = (existingJob.externalIds as any) || {};
-    if (jobListing.originalJobId && jobListing.sourceSite) {
-      externalIds[jobListing.sourceSite] = jobListing.originalJobId;
-      updateData.externalIds = externalIds;
-    }
+    // Merge external IDs (TODO: Enable when externalIds field is added)
+    // const externalIds = (existingJob.externalIds as any) || {};
+    // if (jobListing.originalJobId && jobListing.sourceSite) {
+    //   externalIds[jobListing.sourceSite] = jobListing.originalJobId;
+    //   updateData.externalIds = externalIds;
+    // }
 
-    // Merge scraped sites tracking
-    const scrapedSites = (existingJob.scrapedSites as any) || {};
-    scrapedSites[jobListing.sourceSite] = {
-      lastSeenAt: new Date().toISOString(),
-      url: jobListing.url,
-      originalId: jobListing.originalJobId,
-    };
-    updateData.scrapedSites = scrapedSites;
+    // Merge scraped sites tracking (TODO: Enable when scrapedSites field is added)
+    // const scrapedSites = (existingJob.scrapedSites as any) || {};
+    // scrapedSites[jobListing.sourceSite] = {
+    //   lastSeenAt: new Date().toISOString(),
+    //   url: jobListing.url,
+    //   originalId: jobListing.originalJobId,
+    // };
+    // updateData.scrapedSites = scrapedSites;
 
     // If the new listing has better/more complete information, update fields
     if (jobListing.description && !existingJob.description) {

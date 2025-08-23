@@ -172,7 +172,7 @@ export class ScraperFactoryService {
     for (const job of jobs) {
       try {
         // Handle company matching first
-        let companyId: string;
+        let _companyId: string;
         
         if (options.enableCompanyMatching) {
           const companyResult = await this.companyMatcher.findOrCreateCompany({
@@ -182,7 +182,8 @@ export class ScraperFactoryService {
             industry: job.industry,
           });
           
-          companyId = companyResult.id;
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          _companyId = companyResult.id; // TODO: Use companyId in job creation (currently commented out on line 218)
           if (!companyResult.isNew) {
             companiesMatched++;
           }

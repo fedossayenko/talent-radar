@@ -23,7 +23,7 @@ export class JobsBgScraper extends BaseScraper {
     super(configService, 'jobs.bg');
     
     this.baseUrl = this.configService.get<string>('scraper.jobsBg.baseUrl', 'https://www.jobs.bg');
-    this.searchUrl = this.configService.get<string>('scraper.jobsBg.searchUrl', 'https://www.jobs.bg/front_job_search.php');
+    this.searchUrl = this.configService.get<string>('scraper.jobsBg.searchUrl', 'https://www.jobs.bg/en/front_job_search.php');
     this.maxPages = this.configService.get<number>('scraper.jobsBg.maxPages', 10);
   }
 
@@ -119,14 +119,14 @@ export class JobsBgScraper extends BaseScraper {
   private buildSearchUrl(page: number, keywords: string[], location?: string, experienceLevel?: string): string {
     const params = new URLSearchParams();
     
-    // Add categories - assuming Java is category 56 based on user's example
+    // Add categories - using Java category 56 based on user's example
     if (keywords.includes('Java')) {
-      params.append('categories[]', '56');
+      params.append('categories[0]', '56');
     }
     
-    // Add technologies
-    keywords.forEach(keyword => {
-      params.append('techs[]', keyword);
+    // Add technologies with indexed format
+    keywords.forEach((keyword, index) => {
+      params.append(`techs[${index}]`, keyword);
     });
     
     // Add location if specified
@@ -153,8 +153,8 @@ export class JobsBgScraper extends BaseScraper {
     try {
       const $ = cheerio.load(html);
       
-      // Jobs.bg uses different selectors - these would need to be determined by analyzing the actual site
-      const jobElements = $('.job-item, .job-listing, .job-card'); // Common class names to try
+      // Jobs.bg uses .job-item containers based on actual site structure
+      const jobElements = $('.job-item');
       
       this.logger.log(`Found ${jobElements.length} job listings in HTML for page ${page}`);
 
@@ -178,18 +178,22 @@ export class JobsBgScraper extends BaseScraper {
 
   private processJobElement($: cheerio.CheerioAPI, element: any): JobListing | null {
     try {
-      // These selectors would need to be determined by analyzing jobs.bg HTML structure
-      const titleElement = $(element).find('.job-title, h3, h2, .title');
-      const companyElement = $(element).find('.company, .company-name, .employer');
-      const locationElement = $(element).find('.location, .city, .place');
-      const linkElement = $(element).find('a').first();
-      const dateElement = $(element).find('.date, .posted, .time');
+      // Actual jobs.bg selectors based on HTML structure analysis
+      const titleElement = $(element).find('.job-title a');
+      const companyElement = $(element).find('.company-name');
+      const locationElement = $(element).find('.company-location, .location');
+      const linkElement = $(element).find('.job-title a').first();
+      const dateElement = $(element).find('.date');
+      const salaryElement = $(element).find('.salary');
+      const workTypeElement = $(element).find('.work-type');
       
       const title = titleElement.text().trim();
       const company = companyElement.text().trim();
-      const location = locationElement.text().trim();
+      const location = locationElement.first().text().trim();
       const link = linkElement.attr('href');
       const dateText = dateElement.text().trim();
+      const salaryText = salaryElement.text().trim();
+      const workTypeText = workTypeElement.text().trim();
       
       if (!title || !company || !link) {
         return null;
@@ -198,23 +202,34 @@ export class JobsBgScraper extends BaseScraper {
       // Build full URL if relative
       const fullUrl = link.startsWith('http') ? link : `${this.baseUrl}${link}`;
       
-      // Extract technologies from job text
-      const jobText = $(element).text();
-      const technologies = this.extractTechnologies(jobText);
+      // Extract technologies from specific tech elements and job text
+      const techElements = $(element).find('.tech');
+      const technologies: string[] = [];
+      techElements.each((i, techEl) => {
+        const tech = $(techEl).text().trim();
+        if (tech) technologies.push(tech);
+      });
+      
+      // Fallback: extract from job text if no tech elements found
+      if (technologies.length === 0) {
+        const jobText = $(element).text();
+        technologies.push(...this.extractTechnologies(jobText));
+      }
       
       return {
         title,
         company: this.normalizeCompanyName(company),
-        location: location || 'София', // Default to Sofia
-        workModel: this.determineWorkModel(jobText),
+        location: location || 'Sofia', // Default to Sofia
+        workModel: this.determineWorkModelFromText(workTypeText, $(element).text()),
         technologies,
         postedDate: this.parsePostedDate(dateText),
+        salaryRange: salaryText || undefined,
         url: fullUrl,
         originalJobId: this.extractJobId(fullUrl),
         sourceSite: 'jobs.bg',
-        description: '',
+        description: $(element).find('.job-description').text().trim() || '',
         requirements: '',
-        experienceLevel: this.determineExperienceLevel(title, jobText),
+        experienceLevel: this.determineExperienceLevel(title, $(element).text()),
         employmentType: 'full-time', // Default
       };
       
@@ -282,20 +297,40 @@ export class JobsBgScraper extends BaseScraper {
   private determineWorkModel(text: string): string {
     const textLower = text.toLowerCase();
     
-    if (textLower.includes('дистанционно') || textLower.includes('remote') || textLower.includes('от дома')) {
+    if (textLower.includes('remote')) {
       return 'remote';
     }
     
-    if (textLower.includes('хибридно') || textLower.includes('hybrid') || textLower.includes('смесено')) {
+    if (textLower.includes('hybrid')) {
       return 'hybrid';
     }
     
-    if (textLower.includes('офис') || textLower.includes('office') || textLower.includes('на място')) {
+    if (textLower.includes('office') || textLower.includes('on-site')) {
       return 'office';
     }
     
     return 'not_specified';
   }
+
+  private determineWorkModelFromText(workTypeText: string, fallbackText: string): string {
+    // First try the specific work type element
+    if (workTypeText) {
+      const workType = workTypeText.toLowerCase().trim();
+      if (workType.includes('remote')) {
+        return 'remote';
+      }
+      if (workType.includes('hybrid')) {
+        return 'hybrid';  
+      }
+      if (workType.includes('office') || workType.includes('on-site')) {
+        return 'office';
+      }
+    }
+    
+    // Fallback to general text analysis
+    return this.determineWorkModel(fallbackText);
+  }
+
 
   private determineExperienceLevel(title: string, text: string): string {
     const combined = (title + ' ' + text).toLowerCase();

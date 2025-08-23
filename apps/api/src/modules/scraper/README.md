@@ -1,14 +1,14 @@
-# Generic Job Scraping Architecture V2
+# Generic Job Scraping Architecture
 
 ## Overview
 
-The V2 scraping architecture introduces a generic, multi-site job scraping system that replaces the previous dev.bg-only implementation. This new architecture supports:
+The enhanced scraping architecture provides a generic, multi-site job scraping system that supports:
 
 - **Multiple job sites** (dev.bg, jobs.bg, easily extensible)
 - **Cross-site duplicate detection** using fuzzy matching algorithms
 - **Company deduplication** with intelligent name matching
 - **Plugin architecture** for adding new scrapers
-- **Backward compatibility** with existing V1 code
+- **API v2 routes** (`/api/v2/scraper/*`)
 
 ## Architecture Components
 
@@ -174,14 +174,15 @@ export default registerAs('scraper', () => ({
 
 ## API Endpoints
 
-### V2 Enhanced Endpoints
+### Enhanced API v2 Endpoints
 
 ```
-POST /scraper/v2/scrape                    # Multi-site scraping
-POST /scraper/v2/sites/{site}/scrape       # Single site scraping  
-POST /scraper/v2/jobs/check-duplicates     # Check for duplicates
-GET  /scraper/v2/stats                     # Enhanced statistics
-GET  /scraper/v2/scrapers                  # Available scrapers info
+POST /api/v2/scraper/scrape                # Multi-site scraping
+POST /api/v2/scraper/sites/{site}/scrape   # Single site scraping  
+POST /api/v2/scraper/jobs/check-duplicates # Check for duplicates
+GET  /api/v2/scraper/stats                 # Enhanced statistics
+GET  /api/v2/scraper/scrapers              # Available scrapers info
+POST /api/v2/scraper/jobs/{url}/details    # Fetch job details
 ```
 
 ### Query Parameters

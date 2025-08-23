@@ -71,7 +71,7 @@ export class CompanyMatcherService {
         location: companyData.location,
         industry: companyData.industry,
         description: companyData.description,
-        companyAliases: [companyData.name], // Track all known names
+        // companyAliases: [companyData.name], // TODO: Add this field to database schema
       },
     });
 
@@ -138,17 +138,17 @@ export class CompanyMatcherService {
     
     if (byName) return byName.id;
 
-    // Check in company aliases
-    const byAlias = await this.prisma.company.findFirst({
-      where: {
-        companyAliases: {
-          array_contains: [companyData.name],
-        },
-      },
-      select: { id: true },
-    });
-    
-    if (byAlias) return byAlias.id;
+    // Check in company aliases (TODO: Enable when companyAliases field is added)
+    // const byAlias = await this.prisma.company.findFirst({
+    //   where: {
+    //     companyAliases: {
+    //       array_contains: [companyData.name],
+    //     },
+    //   },
+    //   select: { id: true },
+    // });
+    // 
+    // if (byAlias) return byAlias.id;
 
     return null;
   }
@@ -159,28 +159,33 @@ export class CompanyMatcherService {
 
     if (nameWords.length === 0) return [];
 
-    // Find companies with similar names
-    const candidates = await this.prisma.company.findMany({
-      where: {
-        OR: [
-          // Match by first significant word
-          { name: { contains: nameWords[0], mode: 'insensitive' } },
-          // Match by any word in aliases
-          ...nameWords.map(word => ({
-            companyAliases: {
-              array_contains: [word],
-            },
-          })),
-          // Match by website domain if available
-          ...(companyData.website ? [{
-            website: { contains: this.extractDomain(companyData.website) || '', mode: 'insensitive' }
-          }] : []),
-        ],
-      },
-      take: 50, // Limit results for performance
-    });
+    try {
+      // Find companies with similar names
+      const candidates = await this.prisma.company.findMany({
+        where: {
+          OR: [
+            // Match by first significant word
+            { name: { contains: nameWords[0], mode: 'insensitive' } },
+            // Match by any word in aliases (TODO: Enable when companyAliases field is added)
+            // ...nameWords.map(word => ({
+            //   companyAliases: {
+            //     array_contains: [word],
+            //   },
+            // })),
+            // Match by website domain if available
+            ...(companyData.website ? [{
+              website: { contains: this.extractDomain(companyData.website) || '' }
+            }] : []),
+          ],
+        },
+        take: 50, // Limit results for performance
+      });
 
-    return candidates;
+      return candidates;
+    } catch (error) {
+      this.logger.error('Error finding candidate companies:', error);
+      return [];
+    }
   }
 
   private calculateCompanySimilarity(newCompany: CompanyData, existingCompany: any): number {
@@ -206,14 +211,14 @@ export class CompanyMatcherService {
       industryScore = this.stringSimilarity(newCompany.industry, existingCompany.industry);
     }
 
-    // Check aliases
-    let aliasScore = 0;
-    if (existingCompany.companyAliases) {
-      const aliases = existingCompany.companyAliases as string[];
-      aliasScore = Math.max(...aliases.map(alias => 
-        this.calculateNameSimilarity(newCompany.name, alias)
-      ));
-    }
+    // Check aliases (TODO: Enable when companyAliases field is added)
+    const aliasScore = 0;
+    // if (existingCompany.companyAliases) {
+    //   const aliases = existingCompany.companyAliases as string[];
+    //   aliasScore = Math.max(...aliases.map(alias => 
+    //     this.calculateNameSimilarity(newCompany.name, alias)
+    //   ));
+    // }
 
     // Website domain match is very strong signal
     if (websiteScore === 1.0) {
@@ -354,16 +359,16 @@ export class CompanyMatcherService {
       if (industryScore > 0.8) reasons.push('Same industry');
     }
 
-    // Check aliases
-    if (existingCompany.companyAliases) {
-      const aliases = existingCompany.companyAliases as string[];
-      const aliasMatch = aliases.find(alias => 
-        this.calculateNameSimilarity(newCompany.name, alias) > 0.9
-      );
-      if (aliasMatch) {
-        reasons.push(`Matches known alias: ${aliasMatch}`);
-      }
-    }
+    // Check aliases (TODO: Enable when companyAliases field is added)
+    // if (existingCompany.companyAliases) {
+    //   const aliases = existingCompany.companyAliases as string[];
+    //   const aliasMatch = aliases.find(alias => 
+    //     this.calculateNameSimilarity(newCompany.name, alias) > 0.9
+    //   );
+    //   if (aliasMatch) {
+    //     reasons.push(`Matches known alias: ${aliasMatch}`);
+    //   }
+    // }
 
     return reasons;
   }
@@ -379,11 +384,11 @@ export class CompanyMatcherService {
 
     const updateData: any = {};
 
-    // Add new name to aliases if not already present
-    const aliases = (existingCompany.companyAliases as string[]) || [];
-    if (!aliases.some(alias => alias.toLowerCase() === newCompanyData.name.toLowerCase())) {
-      updateData.companyAliases = [...aliases, newCompanyData.name];
-    }
+    // Add new name to aliases if not already present (TODO: Enable when companyAliases field is added)
+    // const aliases = (existingCompany.companyAliases as string[]) || [];
+    // if (!aliases.some(alias => alias.toLowerCase() === newCompanyData.name.toLowerCase())) {
+    //   updateData.companyAliases = [...aliases, newCompanyData.name];
+    // }
 
     // Update website if we have a new one and old one is empty
     if (newCompanyData.website && !existingCompany.website) {
