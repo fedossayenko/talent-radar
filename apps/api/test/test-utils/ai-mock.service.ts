@@ -74,6 +74,25 @@ export class AiMockService {
   }
 
   /**
+   * Mock extraction method with raw response - Enhanced version for pipeline traceability
+   */
+  async extractVacancyDataWithRawResponse(
+    content: string,
+    sourceUrl: string,
+    options: { skipCache?: boolean } = {},
+  ): Promise<{ result: VacancyExtractionResult | null; rawResponse: string }> {
+    // Call the existing method to get the result
+    const result = await this.extractVacancyData(content, sourceUrl, options);
+    
+    // Generate mock raw response
+    const mockRawResponse = result ? 
+      JSON.stringify(result, null, 2) : 
+      '{"error": "Failed to extract vacancy data"}';
+    
+    return { result, rawResponse: mockRawResponse };
+  }
+
+  /**
    * Mock content cleaning
    */
   async cleanContent(content: string): Promise<string> {
