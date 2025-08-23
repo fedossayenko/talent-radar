@@ -15,7 +15,7 @@ export class CompanyService {
     try {
       return JSON.parse(field);
     } catch (error) {
-      this.logger.warn(`Failed to parse JSON field: ${field}`);
+      this.logger.warn(`Failed to parse JSON field: ${field}`, error);
       return field;
     }
   }
