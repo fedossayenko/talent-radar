@@ -67,6 +67,9 @@ export class ScraperService {
    * Scrape jobs from all enabled sites or specific sites
    */
   async scrapeAllSites(options: EnhancedScrapingOptions = {}): Promise<EnhancedScrapingResult> {
+    this.logger.log('🔥 SCRAPE ALL SITES CALLED 🔥');
+    console.log('🔥 SCRAPE ALL SITES CALLED 🔥');
+    
     const { 
       sites,
       enableAiExtraction = true, 
@@ -93,6 +96,9 @@ export class ScraperService {
     };
 
     try {
+      this.logger.log('🔥 About to call scraperFactory.scrapeMultipleSites 🔥');
+      console.log('🔥 About to call scraperFactory.scrapeMultipleSites 🔥');
+      
       // Use factory to scrape multiple sites
       const multiSiteResult = await this.scraperFactory.scrapeMultipleSites({
         ...scraperOptions,

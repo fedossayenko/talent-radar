@@ -5,6 +5,16 @@ export default registerAs('scraper', () => ({
   enabled: process.env.SCRAPER_ENABLED !== 'false',
   enabledSites: process.env.SCRAPER_ENABLED_SITES ? 
     process.env.SCRAPER_ENABLED_SITES.split(',') : ['dev.bg', 'jobs.bg'],
+  
+  // Browser configuration
+  browser: {
+    headless: process.env.SCRAPER_BROWSER_HEADLESS !== 'false',
+    loadImages: process.env.SCRAPER_BROWSER_LOAD_IMAGES === 'true',
+    stealth: process.env.SCRAPER_BROWSER_STEALTH !== 'false',
+  },
+  
+  // Session management
+  sessionDir: process.env.SCRAPER_SESSION_DIR || './scraper-sessions',
 
   // Site-specific configurations
   sites: {
@@ -28,6 +38,25 @@ export default registerAs('scraper', () => ({
       maxPages: parseInt(process.env.JOBS_BG_MAX_PAGES || '10', 10),
       maxRetries: parseInt(process.env.JOBS_BG_MAX_RETRIES || '3', 10),
       userAgent: process.env.JOBS_BG_USER_AGENT || 'TalentRadar/1.0 (Job Aggregator)',
+      useHttpFallback: process.env.JOBS_BG_HTTP_FALLBACK !== 'true', // Browser-first for jobs.bg
+      stealth: {
+        hideWebdriver: true,
+        spoofUserAgent: true,
+        spoofWebGL: true,
+        spoofPlugins: true,
+        spoofLanguages: true,
+        randomizeViewport: true,
+        realisticTiming: true,
+        addMouseMovements: false,
+      },
+      evasion: {
+        minDelay: 2000,
+        maxDelay: 5000,
+        scrollPage: true,
+        mouseMovements: false,
+        maxSessionRequests: 20,
+        sessionRotationInterval: 30,
+      },
     },
   },
 

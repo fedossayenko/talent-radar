@@ -20,41 +20,80 @@ export class ScraperRegistryService implements OnModuleInit {
     private readonly jobsBgScraper: JobsBgScraper,
   ) {
     this.enabledSites = this.configService.get<string[]>('scraper.enabledSites', ['dev.bg', 'jobs.bg']);
+    this.logger.log('ScraperRegistryService constructor called');
+    this.logger.log(`Enabled sites from config: ${this.enabledSites.join(', ')}`);
   }
 
   onModuleInit() {
+    this.logger.log('Starting scraper registry initialization...');
+    this.logger.log(`Global scraper enabled: ${this.configService.get<boolean>('scraper.enabled', true)}`);
+    this.logger.log(`Configured enabled sites: ${this.enabledSites.join(', ')}`);
+    
     this.registerScrapers();
-    this.logger.log(`Scraper registry initialized with ${this.scrapers.size} scrapers`);
-    this.logger.log(`Enabled sites: ${this.enabledSites.join(', ')}`);
+    
+    this.logger.log(`Scraper registry initialization completed with ${this.scrapers.size} scrapers`);
+    this.logger.log(`Successfully registered sites: ${Array.from(this.scrapers.keys()).join(', ')}`);
+    
+    // Log any missing scrapers
+    const missingSites = this.enabledSites.filter(site => !this.scrapers.has(site));
+    if (missingSites.length > 0) {
+      this.logger.warn(`Sites enabled but not registered: ${missingSites.join(', ')}`);
+    }
   }
 
   /**
    * Register all available scrapers
    */
   private registerScrapers(): void {
+    this.logger.log('Starting to register scrapers...');
+    this.logger.log(`Available scrapers in constructor: devBgScraper=${!!this.devBgScraper}, jobsBgScraper=${!!this.jobsBgScraper}`);
+    
     // Register dev.bg scraper
-    if (this.isScraperEnabled('dev.bg')) {
-      this.scrapers.set('dev.bg', this.devBgScraper);
-      this.logger.log('Registered dev.bg scraper');
+    try {
+      this.logger.log('Attempting to register dev.bg scraper...');
+      if (this.isScraperEnabled('dev.bg')) {
+        this.scrapers.set('dev.bg', this.devBgScraper);
+        this.logger.log('✓ Successfully registered dev.bg scraper');
+      } else {
+        this.logger.log('✗ dev.bg scraper disabled in configuration');
+      }
+    } catch (error) {
+      this.logger.error('✗ Failed to register dev.bg scraper:', error.message);
+      this.logger.error('Error stack:', error.stack);
     }
 
     // Register jobs.bg scraper
-    if (this.isScraperEnabled('jobs.bg')) {
-      this.scrapers.set('jobs.bg', this.jobsBgScraper);
-      this.logger.log('Registered jobs.bg scraper');
+    try {
+      this.logger.log('Attempting to register jobs.bg scraper...');
+      if (this.isScraperEnabled('jobs.bg')) {
+        this.scrapers.set('jobs.bg', this.jobsBgScraper);
+        this.logger.log('✓ Successfully registered jobs.bg scraper');
+      } else {
+        this.logger.log('✗ jobs.bg scraper disabled in configuration');
+      }
+    } catch (error) {
+      this.logger.error('✗ Failed to register jobs.bg scraper:', error.message);
+      this.logger.error('Error stack:', error.stack);
     }
+    
+    this.logger.log(`Registration completed. Total scrapers registered: ${this.scrapers.size}`);
   }
 
   /**
    * Get scraper by site name
    */
   getScraper(siteName: string): IJobScraper | null {
+    this.logger.log(`getScraper called for site: ${siteName}`);
+    this.logger.log(`Available scrapers: [${Array.from(this.scrapers.keys()).join(', ')}]`);
+    this.logger.log(`Total registered scrapers: ${this.scrapers.size}`);
+    
     const scraper = this.scrapers.get(siteName);
     if (!scraper) {
       this.logger.warn(`No scraper found for site: ${siteName}`);
       return null;
     }
     
+    this.logger.log(`Found scraper for ${siteName}: ${scraper.constructor.name}`);
     return scraper;
   }
 
@@ -142,27 +181,45 @@ export class ScraperRegistryService implements OnModuleInit {
    * Check if a specific scraper is enabled via configuration
    */
   private isScraperEnabled(siteName: string): boolean {
+    this.logger.log(`Checking if scraper is enabled for site: ${siteName}`);
+    
     // Check if globally enabled
-    if (!this.configService.get<boolean>('scraper.enabled', true)) {
+    const globallyEnabled = this.configService.get<boolean>('scraper.enabled', true);
+    this.logger.log(`Global scraper enabled: ${globallyEnabled}`);
+    if (!globallyEnabled) {
+      this.logger.log(`Site ${siteName} disabled globally`);
       return false;
     }
 
     // Check if site is in enabled sites list
+    this.logger.log(`Enabled sites list: [${this.enabledSites.join(', ')}]`);
     if (!this.enabledSites.includes(siteName)) {
       this.logger.log(`Site ${siteName} not in enabled sites list`);
       return false;
     }
 
-    // Check site-specific configuration
-    const siteKey = siteName.replace('.', '').replace('-', '');
+    // Check site-specific configuration - convert to camelCase key
+    const siteKey = this.convertSiteNameToConfigKey(siteName);
+    this.logger.log(`Site key for config lookup: ${siteKey}`);
     const siteConfig = this.configService.get(`scraper.sites.${siteKey}`, {});
+    this.logger.log(`Site config for ${siteName}:`, siteConfig);
     
     if (siteConfig.enabled === false) {
       this.logger.log(`Site ${siteName} explicitly disabled in configuration`);
       return false;
     }
 
+    this.logger.log(`Site ${siteName} is enabled`);
     return true;
+  }
+
+  /**
+   * Convert site name to configuration key (e.g., 'dev.bg' -> 'devBg', 'jobs.bg' -> 'jobsBg')
+   */
+  private convertSiteNameToConfigKey(siteName: string): string {
+    return siteName
+      .replace(/[.-]/g, '') // Remove dots and dashes
+      .replace(/bg$/i, 'Bg'); // Capitalize 'Bg' suffix
   }
 
   /**

@@ -39,7 +39,10 @@ export class ScraperFactoryService {
     private readonly scraperRegistry: ScraperRegistryService,
     private readonly duplicateDetector: DuplicateDetectorService,
     private readonly companyMatcher: CompanyMatcherService,
-  ) {}
+  ) {
+    this.logger.log('ScraperFactoryService constructor called');
+    this.logger.log(`ScraperRegistry instance: ${!!this.scraperRegistry}`);
+  }
 
   /**
    * Scrape jobs from multiple sites with deduplication
@@ -119,11 +122,16 @@ export class ScraperFactoryService {
    * Scrape a single site
    */
   async scrapeSingleSite(siteName: string, options: ScraperOptions): Promise<ScrapingResult> {
+    this.logger.log(`Looking for scraper for site: ${siteName}`);
     const scraper = this.scraperRegistry.getScraper(siteName);
+    this.logger.log(`Scraper found for ${siteName}: ${!!scraper} (type: ${scraper?.constructor?.name})`);
+    
     if (!scraper) {
+      this.logger.error(`No scraper available for site: ${siteName}`);
       throw new Error(`No scraper available for site: ${siteName}`);
     }
 
+    this.logger.log(`Using scraper ${scraper.constructor.name} for site ${siteName}`);
     return await scraper.scrapeJobs(options);
   }
 

@@ -8,6 +8,7 @@ import {
   ScrapingResult,
   JobDetails,
 } from '../interfaces/job-scraper.interface';
+import { BrowserEngineService } from '../services/browser-engine.service';
 
 /**
  * Jobs.bg job scraper implementation
@@ -19,12 +20,23 @@ export class JobsBgScraper extends BaseScraper {
   private readonly searchUrl: string;
   private readonly maxPages: number;
 
-  constructor(configService: ConfigService) {
-    super(configService, 'jobs.bg');
-    
-    this.baseUrl = this.configService.get<string>('scraper.jobsBg.baseUrl', 'https://www.jobs.bg');
-    this.searchUrl = this.configService.get<string>('scraper.jobsBg.searchUrl', 'https://www.jobs.bg/en/front_job_search.php');
-    this.maxPages = this.configService.get<number>('scraper.jobsBg.maxPages', 10);
+  constructor(
+    configService: ConfigService,
+    browserEngine: BrowserEngineService
+  ) {
+    try {
+      console.log('JobsBgScraper constructor starting...');
+      super(configService, 'jobs.bg', browserEngine);
+      
+      this.baseUrl = this.configService.get<string>('scraper.sites.jobsBg.baseUrl', 'https://www.jobs.bg');
+      this.searchUrl = this.configService.get<string>('scraper.sites.jobsBg.searchUrl', 'https://www.jobs.bg/front_job_search.php');
+      this.maxPages = this.configService.get<number>('scraper.sites.jobsBg.maxPages', 10);
+      
+      console.log('JobsBgScraper constructor completed successfully');
+    } catch (error) {
+      console.error('JobsBgScraper constructor failed:', error);
+      throw error;
+    }
   }
 
   async scrapeJobs(options: ScraperOptions = {}): Promise<ScrapingResult> {
@@ -37,13 +49,14 @@ export class JobsBgScraper extends BaseScraper {
       const url = this.buildSearchUrl(page, keywords, location, experienceLevel);
       this.logger.log(`Fetching HTML from: ${url}`);
       
-      const response = await this.makeRequest(url);
-      if (!response.data) {
-        this.logger.warn(`No HTML data received from jobs.bg for page ${page}`);
+      // Use browser-first approach for jobs.bg (known to block HTTP requests)
+      const response = await this.fetchPage(url, { forceBrowser: true });
+      if (!response.success || !response.html) {
+        this.logger.warn(`Failed to fetch HTML from jobs.bg for page ${page}: ${response.error || 'No content'}`);
         return this.createEmptyResult(page, startTime, url);
       }
 
-      const jobs = await this.parseJobsFromHtml(response.data, page);
+      const jobs = await this.parseJobsFromHtml(response.html, page);
       
       // Apply limit if specified
       const limitedJobs = limit && jobs.length > limit ? jobs.slice(0, limit) : jobs;
@@ -53,7 +66,7 @@ export class JobsBgScraper extends BaseScraper {
       }
       
       // Check if there are more pages
-      const hasNextPage = this.hasNextPage(response.data, page);
+      const hasNextPage = this.hasNextPage(response.html, page);
       
       return {
         jobs: limitedJobs,
@@ -89,9 +102,19 @@ export class JobsBgScraper extends BaseScraper {
     try {
       this.logger.log(`Fetching job details from: ${jobUrl}`);
       
-      const response = await this.makeRequest(jobUrl);
+      // Use browser automation for job details as well
+      const response = await this.fetchPage(jobUrl, { forceBrowser: true });
       
-      return this.parseJobDetailsFromHtml(response.data, jobUrl);
+      if (!response.success || !response.html) {
+        this.logger.warn(`Failed to fetch job details from ${jobUrl}: ${response.error || 'No content'}`);
+        return { 
+          description: '', 
+          requirements: '',
+          rawHtml: '',
+        };
+      }
+      
+      return this.parseJobDetailsFromHtml(response.html, jobUrl);
 
     } catch (error) {
       this.logger.warn(`Failed to fetch job details from ${jobUrl}:`, error.message);

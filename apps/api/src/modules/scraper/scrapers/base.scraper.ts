@@ -1,16 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import axios, { AxiosResponse } from 'axios';
 import {
   IJobScraper,
   ScraperOptions,
   ScrapingResult,
   JobDetails,
 } from '../interfaces/job-scraper.interface';
+import {
+  BrowserSessionConfig,
+  BrowserScrapingResponse,
+  IBrowserSession,
+} from '../interfaces/browser-scraper.interface';
+import { BrowserEngineService } from '../services/browser-engine.service';
 
 /**
  * Abstract base class for all job scrapers
- * Provides common functionality like rate limiting, retries, and error handling
+ * Provides modern browser-based scraping with stealth capabilities
  */
 @Injectable()
 export abstract class BaseScraper implements IJobScraper {
@@ -21,17 +26,54 @@ export abstract class BaseScraper implements IJobScraper {
   protected readonly requestDelay: number;
   protected readonly maxRetries: number;
   protected readonly userAgent: string;
+  protected readonly useHttpFallback: boolean;
+  
+  // Browser session for this scraper
+  protected browserSession: IBrowserSession | null = null;
   
   constructor(
     protected readonly configService: ConfigService,
     protected readonly siteName: string,
+    protected readonly browserEngine?: BrowserEngineService,
   ) {
     // Load common configuration with site-specific prefixes
-    const siteKey = siteName.toLowerCase().replace(/[.-]/g, '');
-    this.requestTimeout = this.configService.get<number>(`scraper.${siteKey}.requestTimeout`, 30000);
-    this.requestDelay = this.configService.get<number>(`scraper.${siteKey}.requestDelay`, 2000);
-    this.maxRetries = this.configService.get<number>(`scraper.${siteKey}.maxRetries`, 3);
-    this.userAgent = this.configService.get<string>(`scraper.${siteKey}.userAgent`, 'TalentRadar/1.0 (Job Aggregator)');
+    const siteKey = this.convertSiteNameToConfigKey(siteName);
+    this.requestTimeout = this.configService.get<number>(`scraper.sites.${siteKey}.requestTimeout`, 30000);
+    this.requestDelay = this.configService.get<number>(`scraper.sites.${siteKey}.requestDelay`, 2000);
+    this.maxRetries = this.configService.get<number>(`scraper.sites.${siteKey}.maxRetries`, 3);
+    this.userAgent = this.configService.get<string>(`scraper.sites.${siteKey}.userAgent`, 'TalentRadar/1.0 (Job Aggregator)');
+    this.useHttpFallback = this.configService.get<boolean>(`scraper.sites.${siteKey}.useHttpFallback`, true);
+    
+    // Validate essential configuration
+    this.validateConfiguration(siteKey);
+  }
+
+  /**
+   * Convert site name to configuration key (e.g., 'dev.bg' -> 'devBg', 'jobs.bg' -> 'jobsBg')
+   */
+  private convertSiteNameToConfigKey(siteName: string): string {
+    return siteName
+      .replace(/[.-]/g, '') // Remove dots and dashes
+      .replace(/bg$/i, 'Bg'); // Capitalize 'Bg' suffix
+  }
+
+  /**
+   * Validate essential scraper configuration to ensure proper setup
+   */
+  private validateConfiguration(siteKey: string): void {
+    const baseUrl = this.configService.get<string>(`scraper.sites.${siteKey}.baseUrl`);
+    const searchUrl = this.configService.get<string>(`scraper.sites.${siteKey}.searchUrl`) || 
+                      this.configService.get<string>(`scraper.sites.${siteKey}.apiUrl`);
+    
+    if (!baseUrl) {
+      throw new Error(`Missing required configuration: scraper.sites.${siteKey}.baseUrl for site ${this.siteName}`);
+    }
+    
+    if (!searchUrl) {
+      throw new Error(`Missing required configuration: scraper.sites.${siteKey}.searchUrl or apiUrl for site ${this.siteName}`);
+    }
+    
+    this.logger.debug(`Configuration validated for ${this.siteName}: baseUrl=${baseUrl}, searchUrl=${searchUrl}`);
   }
 
   /**
@@ -47,14 +89,110 @@ export abstract class BaseScraper implements IJobScraper {
    */
   
   /**
-   * Make HTTP request with retry logic and rate limiting
+   * Fetch page using modern browser automation with smart fallback
    */
-  protected async makeRequest(url: string, options: any = {}): Promise<AxiosResponse> {
+  protected async fetchPage(url: string, options: { useBrowser?: boolean; forceBrowser?: boolean } = {}): Promise<BrowserScrapingResponse> {
+    const startTime = Date.now();
+    const { useBrowser = true, forceBrowser = false } = options;
+    
+    // Try HTTP first if fallback is enabled and not forced to use browser
+    if (!forceBrowser && this.useHttpFallback && !useBrowser) {
+      try {
+        this.logger.debug(`Trying HTTP request first for: ${url}`);
+        const httpResponse = await this.makeHttpRequest(url);
+        
+        // Convert HTTP response to browser response format
+        return {
+          html: httpResponse.data,
+          finalUrl: httpResponse.request?.responseURL || url,
+          status: httpResponse.status,
+          headers: httpResponse.headers,
+          success: true,
+          loadTime: Date.now() - startTime,
+          cookies: [], // HTTP requests don't maintain cookies automatically
+        };
+        
+      } catch (error) {
+        // If HTTP fails with 403/429, automatically try browser
+        if (error.response?.status === 403 || error.response?.status === 429) {
+          this.logger.warn(`HTTP request blocked (${error.response.status}), falling back to browser automation`);
+          return this.fetchWithBrowser(url);
+        }
+        
+        // For other HTTP errors, still try browser if browser engine is available
+        if (this.browserEngine) {
+          this.logger.warn(`HTTP request failed (${error.message}), falling back to browser automation`);
+          return this.fetchWithBrowser(url);
+        }
+        
+        throw error;
+      }
+    }
+    
+    // Use browser automation
+    return this.fetchWithBrowser(url);
+  }
+  
+  /**
+   * Fetch page using browser automation
+   */
+  protected async fetchWithBrowser(url: string): Promise<BrowserScrapingResponse> {
+    if (!this.browserEngine) {
+      throw new Error('Browser engine not available for browser-based scraping');
+    }
+    
+    try {
+      // Get or create browser session
+      if (!this.browserSession) {
+        const sessionConfig: BrowserSessionConfig = {
+          siteName: this.siteName,
+          headless: this.configService.get<boolean>('scraper.browser.headless', true),
+          timeout: this.requestTimeout,
+          userAgent: this.userAgent,
+          loadImages: this.configService.get<boolean>('scraper.browser.loadImages', false),
+          stealth: this.configService.get<boolean>('scraper.browser.stealth', true),
+        };
+        
+        this.browserSession = await this.browserEngine.getSession(sessionConfig);
+        this.logger.debug(`Created browser session for ${this.siteName}`);
+      }
+      
+      return await this.browserEngine.fetchPage(url, this.browserSession);
+      
+    } catch (error) {
+      this.logger.error(`Browser fetch failed for ${url}:`, error.message);
+      
+      // If browser session fails, try to rotate it
+      if (this.browserSession) {
+        try {
+          this.browserSession = await this.browserEngine.rotateSession(this.browserSession.id);
+          this.logger.debug(`Rotated browser session for ${this.siteName}`);
+          
+          // Retry with new session
+          return await this.browserEngine.fetchPage(url, this.browserSession);
+        } catch (rotateError) {
+          this.logger.error(`Session rotation failed:`, rotateError.message);
+        }
+      }
+      
+      throw error;
+    }
+  }
+  
+  /**
+   * Legacy HTTP request method for fallback
+   * @deprecated Use fetchPage() instead
+   */
+  protected async makeHttpRequest(url: string, options: any = {}): Promise<any> {
+    // This is a simplified HTTP implementation for fallback
+    // Will be removed once all scrapers are migrated to browser-first approach
+    const axios = require('axios');
+    
     let lastError: Error;
     
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
       try {
-        this.logger.debug(`Making request to ${url} (attempt ${attempt}/${this.maxRetries})`);
+        this.logger.debug(`Making HTTP request to ${url} (attempt ${attempt}/${this.maxRetries})`);
         
         const response = await axios.get(url, {
           headers: {
@@ -79,7 +217,7 @@ export abstract class BaseScraper implements IJobScraper {
         
       } catch (error) {
         lastError = error;
-        this.logger.warn(`Request attempt ${attempt} failed for ${url}:`, error.message);
+        this.logger.warn(`HTTP request attempt ${attempt} failed for ${url}:`, error.message);
         
         // If it's a rate limiting error, wait longer
         if (error.response?.status === 429) {

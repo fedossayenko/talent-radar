@@ -11,6 +11,7 @@ import {
 import { TranslationService } from '../services/translation.service';
 import { JobParserService } from '../services/job-parser.service';
 import { TechPatternService } from '../services/tech-pattern.service';
+import { BrowserEngineService } from '../services/browser-engine.service';
 
 /**
  * Dev.bg job scraper implementation
@@ -27,12 +28,21 @@ export class DevBgScraper extends BaseScraper {
     private readonly translationService: TranslationService,
     private readonly jobParserService: JobParserService,
     private readonly techPatternService: TechPatternService,
+    browserEngine?: BrowserEngineService,
   ) {
-    super(configService, 'dev.bg');
-    
-    this.baseUrl = this.configService.get<string>('scraper.devBg.baseUrl', 'https://dev.bg');
-    this.apiUrl = this.configService.get<string>('scraper.devBg.apiUrl', 'https://dev.bg/company/jobs/java/');
-    this.maxPages = this.configService.get<number>('scraper.devBg.maxPages', 10);
+    try {
+      console.log('DevBgScraper constructor starting...');
+      super(configService, 'dev.bg', browserEngine);
+      
+      this.baseUrl = this.configService.get<string>('scraper.devBg.baseUrl', 'https://dev.bg');
+      this.apiUrl = this.configService.get<string>('scraper.devBg.apiUrl', 'https://dev.bg/company/jobs/java/');
+      this.maxPages = this.configService.get<number>('scraper.devBg.maxPages', 10);
+      
+      console.log('DevBgScraper constructor completed successfully');
+    } catch (error) {
+      console.error('DevBgScraper constructor failed:', error);
+      throw error;
+    }
   }
 
   async scrapeJobs(options: ScraperOptions = {}): Promise<ScrapingResult> {
@@ -45,13 +55,14 @@ export class DevBgScraper extends BaseScraper {
       const url = page === 1 ? this.apiUrl : `${this.apiUrl}page/${page}/`;
       this.logger.log(`Fetching HTML from: ${url}`);
       
-      const response = await this.makeRequest(url);
-      if (!response.data) {
-        this.logger.warn(`No HTML data received from dev.bg for page ${page}`);
+      // Use smart fetching (HTTP first, browser on failure) for dev.bg
+      const response = await this.fetchPage(url, { useBrowser: false });
+      if (!response.success || !response.html) {
+        this.logger.warn(`Failed to fetch HTML from dev.bg for page ${page}: ${response.error || 'No content'}`);
         return this.createEmptyResult(page, startTime, url);
       }
 
-      const jobs = await this.parseJobsFromHtml(response.data, page);
+      const jobs = await this.parseJobsFromHtml(response.html, page);
       
       // Apply limit if specified
       const limitedJobs = limit && jobs.length > limit ? jobs.slice(0, limit) : jobs;
@@ -61,7 +72,7 @@ export class DevBgScraper extends BaseScraper {
       }
       
       // Check if there are more pages
-      const hasNextPage = this.hasNextPage(response.data, page);
+      const hasNextPage = this.hasNextPage(response.html, page);
       
       return {
         jobs: limitedJobs,
@@ -97,16 +108,26 @@ export class DevBgScraper extends BaseScraper {
     try {
       this.logger.log(`Fetching job details from: ${jobUrl}`);
       
-      const response = await this.makeRequest(jobUrl);
+      // Use smart fetching for job details
+      const response = await this.fetchPage(jobUrl, { useBrowser: false });
       
-      const jobDetails = this.jobParserService.parseJobDetailsFromHtml(response.data);
-      const companyUrls = this.jobParserService.extractCompanyUrls(response.data, companyName);
-      const salaryInfo = this.extractSalaryFromContent(response.data);
+      if (!response.success || !response.html) {
+        this.logger.warn(`Failed to fetch job details from ${jobUrl}: ${response.error || 'No content'}`);
+        return { 
+          description: '', 
+          requirements: '',
+          rawHtml: '',
+        };
+      }
+      
+      const jobDetails = this.jobParserService.parseJobDetailsFromHtml(response.html);
+      const companyUrls = this.jobParserService.extractCompanyUrls(response.html, companyName);
+      const salaryInfo = this.extractSalaryFromContent(response.html);
       
       return {
         description: this.translationService.translateJobTerms(jobDetails.description),
         requirements: this.translationService.translateJobTerms(jobDetails.requirements),
-        rawHtml: response.data,
+        rawHtml: response.html,
         companyProfileUrl: companyUrls.profileUrl,
         companyWebsite: companyUrls.website,
         salaryInfo,
