@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as cheerio from 'cheerio';
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { BaseScraper } from './base.scraper';
 import {
   JobListing,
@@ -8,7 +10,7 @@ import {
   ScrapingResult,
   JobDetails,
 } from '../interfaces/job-scraper.interface';
-import { BrowserEngineService } from '../services/browser-engine.service';
+import { StealthBrowserEngineService } from '../services/stealth-browser-engine.service';
 
 /**
  * Jobs.bg job scraper implementation
@@ -22,21 +24,15 @@ export class JobsBgScraper extends BaseScraper {
 
   constructor(
     configService: ConfigService,
-    browserEngine: BrowserEngineService
+    private readonly stealthBrowserEngine: StealthBrowserEngineService
   ) {
-    try {
-      console.log('JobsBgScraper constructor starting...');
-      super(configService, 'jobs.bg', browserEngine);
-      
-      this.baseUrl = this.configService.get<string>('scraper.sites.jobsBg.baseUrl', 'https://www.jobs.bg');
-      this.searchUrl = this.configService.get<string>('scraper.sites.jobsBg.searchUrl', 'https://www.jobs.bg/front_job_search.php');
-      this.maxPages = this.configService.get<number>('scraper.sites.jobsBg.maxPages', 10);
-      
-      console.log('JobsBgScraper constructor completed successfully');
-    } catch (error) {
-      console.error('JobsBgScraper constructor failed:', error);
-      throw error;
-    }
+    super(configService, 'jobs.bg', stealthBrowserEngine);
+    
+    this.baseUrl = this.configService.get<string>('scraper.sites.jobsBg.baseUrl', 'https://www.jobs.bg');
+    this.searchUrl = this.configService.get<string>('scraper.sites.jobsBg.searchUrl', 'https://www.jobs.bg/en/front_job_search.php');
+    this.maxPages = this.configService.get<number>('scraper.sites.jobsBg.maxPages', 10);
+    
+    this.logger.log('JobsBgScraper initialized successfully');
   }
 
   async scrapeJobs(options: ScraperOptions = {}): Promise<ScrapingResult> {
@@ -49,11 +45,33 @@ export class JobsBgScraper extends BaseScraper {
       const url = this.buildSearchUrl(page, keywords, location, experienceLevel);
       this.logger.log(`Fetching HTML from: ${url}`);
       
-      // Use browser-first approach for jobs.bg (known to block HTTP requests)
-      const response = await this.fetchPage(url, { forceBrowser: true });
+      // Use stealth browser with enhanced DataDome bypass techniques
+      const response = await this.fetchWithStealthBrowser(url, { infiniteScroll: true, warmup: true });
+      
+      // Save raw HTML response to file for debugging
+      if (response.html) {
+        await this.saveResponseToFile(response.html, page);
+      }
+      
       if (!response.success || !response.html) {
         this.logger.warn(`Failed to fetch HTML from jobs.bg for page ${page}: ${response.error || 'No content'}`);
         return this.createEmptyResult(page, startTime, url);
+      }
+
+      // Check for DataDome protection before parsing
+      if (this.isCaptchaOrBlocked(response.html)) {
+        return {
+          jobs: [],
+          totalFound: 0,
+          page,
+          hasNextPage: false,
+          errors: ['Jobs.bg is blocking automated access with DataDome protection. Consider using proxy rotation or manual access.'],
+          metadata: {
+            processingTime: Date.now() - startTime,
+            sourceUrl: url,
+            requestCount: 1,
+          },
+        };
       }
 
       const jobs = await this.parseJobsFromHtml(response.html, page);
@@ -176,8 +194,32 @@ export class JobsBgScraper extends BaseScraper {
     try {
       const $ = cheerio.load(html);
       
-      // Jobs.bg uses .job-item containers based on actual site structure
-      const jobElements = $('.job-item');
+      // Check for CAPTCHA or anti-bot protection
+      if (this.isCaptchaOrBlocked(html)) {
+        this.logger.warn('Jobs.bg is showing CAPTCHA or anti-bot protection');
+        return jobs; // Return empty array with warning logged
+      }
+      
+      // Try multiple selectors for job listings
+      const selectors = [
+        'li .mdc-card',           // Primary selector
+        '.job-item .mdc-card',    // Alternative 1
+        '[data-job] .mdc-card',   // Alternative 2
+        '.mdc-card[href]',        // Alternative 3
+      ];
+      
+      let jobElements = $();
+      for (const selector of selectors) {
+        jobElements = $(selector);
+        if (jobElements.length > 0) {
+          this.logger.debug(`Found ${jobElements.length} jobs using selector: ${selector}`);
+          break;
+        }
+      }
+      
+      if (jobElements.length === 0) {
+        this.logger.warn('No job listings found with any selector - possible structure change or blocking');
+      }
       
       this.logger.log(`Found ${jobElements.length} job listings in HTML for page ${page}`);
 
@@ -201,36 +243,46 @@ export class JobsBgScraper extends BaseScraper {
 
   private processJobElement($: cheerio.CheerioAPI, element: any): JobListing | null {
     try {
-      // Actual jobs.bg selectors based on HTML structure analysis
-      const titleElement = $(element).find('.job-title a');
-      const companyElement = $(element).find('.company-name');
-      const locationElement = $(element).find('.company-location, .location');
-      const linkElement = $(element).find('.job-title a').first();
-      const dateElement = $(element).find('.date');
-      const salaryElement = $(element).find('.salary');
-      const workTypeElement = $(element).find('.work-type');
+      // Updated selectors based on actual jobs.bg HTML structure
+      const titleElement = $(element).find('.card-title span').last();
+      const companyElement = $(element).find('.card-logo-info .secondary-text');
+      const cardInfoElement = $(element).find('.card-info');
+      const linkElement = $(element).find('.card-title').closest('a');
+      const dateElement = $(element).find('.card-date');
       
       const title = titleElement.text().trim();
       const company = companyElement.text().trim();
-      const location = locationElement.first().text().trim();
       const link = linkElement.attr('href');
-      const dateText = dateElement.text().trim();
-      const salaryText = salaryElement.text().trim();
-      const workTypeText = workTypeElement.text().trim();
+      const dateText = dateElement.first().contents().filter(function() {
+        return this.nodeType === 3; // Text node
+      }).text().trim();
       
       if (!title || !company || !link) {
+        this.logger.debug(`Missing required fields - Title: "${title}", Company: "${company}", Link: "${link}"`);
         return null;
       }
+      
+      // Extract job metadata from card-info
+      const cardInfoText = cardInfoElement.text();
+      const locationMatch = cardInfoText.match(/location_on\s*([^;]+)/);
+      const location = locationMatch ? locationMatch[1].trim() : 'Sofia';
+      
+      // Use base class method for work model normalization
+      const workModel = this.normalizeWorkModel(cardInfoText);
+      
+      // Use base class method for experience level normalization  
+      const experienceLevel = this.normalizeExperienceLevel(cardInfoText);
       
       // Build full URL if relative
       const fullUrl = link.startsWith('http') ? link : `${this.baseUrl}${link}`;
       
-      // Extract technologies from specific tech elements and job text
-      const techElements = $(element).find('.tech');
+      // Extract technologies from skill images
       const technologies: string[] = [];
-      techElements.each((i, techEl) => {
-        const tech = $(techEl).text().trim();
-        if (tech) technologies.push(tech);
+      $(element).find('.skill img').each((i, img) => {
+        const tech = $(img).attr('alt');
+        if (tech && tech.toLowerCase() !== 'english') {
+          technologies.push(tech.toLowerCase());
+        }
       });
       
       // Fallback: extract from job text if no tech elements found
@@ -242,17 +294,17 @@ export class JobsBgScraper extends BaseScraper {
       return {
         title,
         company: this.normalizeCompanyName(company),
-        location: location || 'Sofia', // Default to Sofia
-        workModel: this.determineWorkModelFromText(workTypeText, $(element).text()),
+        location,
+        workModel,
         technologies,
         postedDate: this.parsePostedDate(dateText),
-        salaryRange: salaryText || undefined,
+        salaryRange: undefined, // Not typically shown in job listings
         url: fullUrl,
         originalJobId: this.extractJobId(fullUrl),
         sourceSite: 'jobs.bg',
-        description: $(element).find('.job-description').text().trim() || '',
+        description: '', // Will be filled when fetching job details
         requirements: '',
-        experienceLevel: this.determineExperienceLevel(title, $(element).text()),
+        experienceLevel,
         employmentType: 'full-time', // Default
       };
       
@@ -317,56 +369,6 @@ export class JobsBgScraper extends BaseScraper {
     };
   }
 
-  private determineWorkModel(text: string): string {
-    const textLower = text.toLowerCase();
-    
-    if (textLower.includes('remote')) {
-      return 'remote';
-    }
-    
-    if (textLower.includes('hybrid')) {
-      return 'hybrid';
-    }
-    
-    if (textLower.includes('office') || textLower.includes('on-site')) {
-      return 'office';
-    }
-    
-    return 'not_specified';
-  }
-
-  private determineWorkModelFromText(workTypeText: string, fallbackText: string): string {
-    // First try the specific work type element
-    if (workTypeText) {
-      const workType = workTypeText.toLowerCase().trim();
-      if (workType.includes('remote')) {
-        return 'remote';
-      }
-      if (workType.includes('hybrid')) {
-        return 'hybrid';  
-      }
-      if (workType.includes('office') || workType.includes('on-site')) {
-        return 'office';
-      }
-    }
-    
-    // Fallback to general text analysis
-    return this.determineWorkModel(fallbackText);
-  }
-
-
-  private determineExperienceLevel(title: string, text: string): string {
-    const combined = (title + ' ' + text).toLowerCase();
-    
-    if (combined.includes('senior') || combined.includes('старши')) return 'senior';
-    if (combined.includes('junior') || combined.includes('младши')) return 'junior';
-    if (combined.includes('lead') || combined.includes('ръководител')) return 'lead';
-    if (combined.includes('principal') || combined.includes('главен')) return 'principal';
-    if (combined.includes('mid') || combined.includes('middle')) return 'mid';
-    if (combined.includes('стаж') || combined.includes('intern')) return 'entry';
-    
-    return 'not_specified';
-  }
 
   private extractJobId(url: string): string | undefined {
     // Extract job ID from jobs.bg URL patterns
@@ -393,6 +395,47 @@ export class JobsBgScraper extends BaseScraper {
     return pageNumbers.some(num => num > currentPage);
   }
 
+  /**
+   * Enhanced DataDome and anti-bot protection detection
+   */
+  private isCaptchaOrBlocked(html: string): boolean {
+    const indicators = [
+      // DataDome specific
+      'captcha-delivery.com',
+      'datadome',
+      'dd_cookie_test',
+      'Challenge solved',
+      
+      // Generic bot protection
+      'Please complete the security check',
+      'Access Denied',
+      'captcha',
+      'hcaptcha',
+      'recaptcha',
+      'Please verify you are a human',
+      'Security Check',
+      'Bot Protection',
+      
+      // CloudFlare
+      'cloudflare',
+      'cf-ray',
+      'Please wait while we check your browser',
+      
+      // Generic blocking indicators
+      'blocked',
+      'forbidden',
+      'rate limit',
+    ];
+    
+    const htmlLower = html.toLowerCase();
+    const hasIndicator = indicators.some(indicator => htmlLower.includes(indicator));
+    
+    // Additional checks for minimal content (possible blocking)
+    const hasMinimalContent = html.length < 1000 && !htmlLower.includes('mdc-card');
+    
+    return hasIndicator || hasMinimalContent;
+  }
+
   private createEmptyResult(page: number, startTime: number, url: string): ScrapingResult {
     return {
       jobs: [],
@@ -406,5 +449,64 @@ export class JobsBgScraper extends BaseScraper {
         requestCount: 1,
       },
     };
+  }
+
+  /**
+   * Fetch page using stealth browser with enhanced evasion
+   */
+  private async fetchWithStealthBrowser(url: string, options?: { infiniteScroll?: boolean, warmup?: boolean }) {
+    try {
+      // Get stealth browser session
+      const session = await this.stealthBrowserEngine.getSession({
+        siteName: 'jobs.bg',
+        headless: true,
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+        viewport: { width: 1920, height: 1080 },
+        loadImages: false,
+        timeout: 45000,
+      });
+
+      // Use stealth browser with warm-up and behavior simulation
+      return await this.stealthBrowserEngine.fetchPageWithWarmup(url, session, options);
+      
+    } catch (error) {
+      this.logger.error(`Stealth browser fetch failed: ${error.message}`);
+      return {
+        html: '',
+        finalUrl: url,
+        status: 0,
+        headers: {},
+        success: false,
+        error: error.message,
+        loadTime: 0,
+        cookies: [],
+      };
+    }
+  }
+
+  /**
+   * Save raw HTML response to file for debugging
+   */
+  private async saveResponseToFile(html: string, page: number): Promise<string> {
+    try {
+      const debugDir = './debug-responses';
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `jobs-bg-page-${page}-${timestamp}.html`;
+      const filepath = join(debugDir, filename);
+      
+      // Ensure debug directory exists
+      await fs.mkdir(debugDir, { recursive: true });
+      
+      // Save HTML content
+      await fs.writeFile(filepath, html, 'utf-8');
+      
+      const absolutePath = join(process.cwd(), filepath);
+      this.logger.log(`HTML response saved to: ${absolutePath}`);
+      
+      return absolutePath;
+    } catch (error) {
+      this.logger.warn(`Failed to save HTML response:`, error.message);
+      return '';
+    }
   }
 }

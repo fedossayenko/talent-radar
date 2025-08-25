@@ -6,11 +6,21 @@ export default registerAs('scraper', () => ({
   enabledSites: process.env.SCRAPER_ENABLED_SITES ? 
     process.env.SCRAPER_ENABLED_SITES.split(',') : ['dev.bg', 'jobs.bg'],
   
-  // Browser configuration
+  // Enhanced browser configuration for DataDome bypass
   browser: {
     headless: process.env.SCRAPER_BROWSER_HEADLESS !== 'false',
     loadImages: process.env.SCRAPER_BROWSER_LOAD_IMAGES === 'true',
     stealth: process.env.SCRAPER_BROWSER_STEALTH !== 'false',
+    // DataDome-specific browser settings
+    dataDomeBypass: {
+      enabled: true,
+      useRealisticUserAgent: true,
+      simulateHumanTiming: true,
+      randomizeFingerprint: true,
+      enableJavaScript: true,
+      enableCookies: true,
+      respectCacheHeaders: true,
+    },
   },
   
   // Session management
@@ -32,30 +42,71 @@ export default registerAs('scraper', () => ({
     jobsBg: {
       enabled: process.env.JOBS_BG_ENABLED !== 'false',
       baseUrl: process.env.JOBS_BG_BASE_URL || 'https://www.jobs.bg',
-      searchUrl: process.env.JOBS_BG_SEARCH_URL || 'https://www.jobs.bg/front_job_search.php',
-      requestTimeout: parseInt(process.env.JOBS_BG_REQUEST_TIMEOUT || '30000', 10),
-      requestDelay: parseInt(process.env.JOBS_BG_REQUEST_DELAY || '3000', 10), // Slower for jobs.bg
-      maxPages: parseInt(process.env.JOBS_BG_MAX_PAGES || '10', 10),
-      maxRetries: parseInt(process.env.JOBS_BG_MAX_RETRIES || '3', 10),
-      userAgent: process.env.JOBS_BG_USER_AGENT || 'TalentRadar/1.0 (Job Aggregator)',
-      useHttpFallback: process.env.JOBS_BG_HTTP_FALLBACK !== 'true', // Browser-first for jobs.bg
+      searchUrl: process.env.JOBS_BG_SEARCH_URL || 'https://www.jobs.bg/en/front_job_search.php',
+      requestTimeout: parseInt(process.env.JOBS_BG_REQUEST_TIMEOUT || '45000', 10), // Increased for complex JS sites
+      requestDelay: parseInt(process.env.JOBS_BG_REQUEST_DELAY || '4000', 10), // Increased for DataDome bypass
+      maxPages: parseInt(process.env.JOBS_BG_MAX_PAGES || '5', 10), // Reduced to avoid detection
+      maxRetries: parseInt(process.env.JOBS_BG_MAX_RETRIES || '2', 10), // Reduced to avoid spam detection
+      userAgent: process.env.JOBS_BG_USER_AGENT || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      useHttpFallback: false, // Always use browser for DataDome sites
+      // DataDome-specific bypass configuration
+      dataDomeBypass: {
+        enabled: true,
+        minSessionDuration: 30000, // Keep session alive for at least 30s
+        maxRequestsPerSession: 5,   // Limit requests per session
+        userBehaviorSimulation: {
+          mouseMovements: true,
+          randomScrolling: true,
+          readingPauses: true,
+          humanTyping: true,
+        },
+        browserFingerprint: {
+          spoofWebGL: true,
+          spoofCanvas: true,
+          spoofWebRTC: true,
+          randomizeViewport: true,
+          realisticPlugins: true,
+        },
+      },
+      // Enhanced stealth configuration for DataDome
       stealth: {
+        enabled: true,
         hideWebdriver: true,
         spoofUserAgent: true,
         spoofWebGL: true,
+        spoofCanvas: true,
         spoofPlugins: true,
         spoofLanguages: true,
+        spoofGeolocation: true,
+        spoofTimezone: true,
         randomizeViewport: true,
         realisticTiming: true,
-        addMouseMovements: false,
+        addMouseMovements: true,
+        simulateHumanBehavior: true,
+        fingerprintRotation: true,
+        behaviorSimulation: true,
+        warmupNavigation: 0.3,  // 30% chance
+        sessionDuration: 45000,  // 45 seconds min
+        requestsPerSession: 4,
       },
+      // Human-like timing configuration
+      timing: {
+        betweenRequests: [4000, 10000],  // 4-10 seconds random
+        scrollDelay: [1000, 3000],       // 1-3 seconds
+        readingTime: [2000, 7000],       // 2-7 seconds
+        mouseMovement: [500, 1500],      // 0.5-1.5 seconds
+        navigationDelay: [2000, 5000],   // 2-5 seconds
+      },
+      // Conservative evasion settings
       evasion: {
-        minDelay: 2000,
-        maxDelay: 5000,
+        minDelay: 3000,
+        maxDelay: 8000,
         scrollPage: true,
-        mouseMovements: false,
-        maxSessionRequests: 20,
-        sessionRotationInterval: 30,
+        mouseMovements: true,
+        maxSessionRequests: 5,     // Very conservative
+        sessionRotationInterval: 10, // Rotate frequently
+        respectRobotsTxt: true,
+        conservativeMode: true,
       },
     },
   },

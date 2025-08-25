@@ -1,52 +1,37 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Browser, BrowserContext, Page } from 'playwright';
+import { Browser, BrowserContext, Page, chromium } from 'playwright';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import * as crypto from 'crypto';
-
-// Import playwright-extra and stealth plugin
-const playwrightExtra = require('playwright-extra');
-const stealth = require('puppeteer-extra-plugin-stealth')();
-
-// Get chromium with stealth capabilities
-const chromium = playwrightExtra.chromium;
 
 import {
   IBrowserEngine,
   IBrowserSession,
   BrowserSessionConfig,
   BrowserScrapingResponse,
-  SessionPersistenceData,
 } from '../interfaces/browser-scraper.interface';
-import { StealthConfigService } from './stealth-config.service';
 
 @Injectable()
 export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
-  private readonly logger = new Logger(BrowserEngineService.name);
+  protected readonly logger = new Logger(BrowserEngineService.name);
   
-  private browser: Browser | null = null;
-  private sessions = new Map<string, IBrowserSession>();
-  private readonly sessionDir: string;
+  protected browser: Browser | null = null;
+  protected sessions = new Map<string, IBrowserSession>();
+  protected readonly sessionDir: string;
   private readonly stats = {
     totalRequests: 0,
     totalLoadTime: 0,
     successfulRequests: 0,
   };
 
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly stealthConfig: StealthConfigService,
-  ) {
+  constructor(private readonly configService: ConfigService) {
     this.sessionDir = this.configService.get<string>(
       'scraper.sessionDir',
       './scraper-sessions'
     );
     
-    // Initialize stealth plugin
-    chromium.use(stealth);
-    
-    this.logger.log('BrowserEngineService initialized with stealth capabilities');
+    this.logger.log('BrowserEngineService initialized with standard Playwright');
   }
 
   async onModuleDestroy() {
@@ -66,24 +51,8 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
     // Check if we have an existing session
     if (this.sessions.has(sessionId)) {
       const session = this.sessions.get(sessionId)!;
-      
-      // Check if session should be rotated
-      const strategy = this.stealthConfig.getEvasionStrategy(config.siteName);
-      if (this.stealthConfig.shouldRotateSession(session.requestCount, session.createdAt, strategy)) {
-        this.logger.log(`Rotating session ${sessionId} due to usage limits`);
-        await this.closeSession(sessionId);
-        return this.createNewSession(config, sessionId);
-      }
-      
       session.lastActivity = new Date();
       return session;
-    }
-
-    // Try to load existing session from disk
-    const loadedSession = await this.loadSession(config);
-    if (loadedSession) {
-      this.sessions.set(sessionId, loadedSession);
-      return loadedSession;
     }
 
     // Create new session
@@ -91,9 +60,9 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
   }
 
   /**
-   * Fetch a page using browser automation
+   * Fetch a page using browser automation with optional infinite scroll
    */
-  async fetchPage(url: string, session: IBrowserSession): Promise<BrowserScrapingResponse> {
+  async fetchPage(url: string, session: IBrowserSession, options?: { infiniteScroll?: boolean }): Promise<BrowserScrapingResponse> {
     const startTime = Date.now();
     
     try {
@@ -103,33 +72,43 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
       session.lastActivity = new Date();
       session.requestCount++;
 
-      const strategy = this.stealthConfig.getEvasionStrategy(session.config.siteName);
-      const antiDetection = this.stealthConfig.getAntiDetectionConfig();
-
-      // Add random delay before request
-      const delay = this.stealthConfig.getRandomDelay(strategy.randomDelay.min, strategy.randomDelay.max);
-      this.logger.debug(`Adding random delay: ${delay}ms`);
-      await this.sleep(delay);
-
-      // Navigate to page with stealth settings
+      // Add random delay before navigation (human-like behavior)
+      await session.page.waitForTimeout(Math.random() * 2000 + 1000);
+      
+      // Navigate to page with realistic timing
       const response = await session.page.goto(url, {
-        waitUntil: 'networkidle',
-        timeout: session.config.timeout || antiDetection.maxLoadTimeout,
+        waitUntil: 'domcontentloaded',
+        timeout: session.config.timeout || 30000,
       });
 
       if (!response) {
         throw new Error('No response received from page navigation');
       }
 
-      // Add human-like interactions
-      if (strategy.scrollPage) {
-        await this.simulateHumanBehavior(session.page, session.config.viewport);
+      // Wait for network to be idle with human-like timing
+      await session.page.waitForLoadState('networkidle');
+      
+      // Simulate human-like mouse movement
+      await session.page.mouse.move(
+        Math.random() * 200 + 100,
+        Math.random() * 200 + 100
+      );
+
+      // For jobs.bg, wait for content to load
+      if (session.config.siteName === 'jobs.bg') {
+        try {
+          // Wait for either job listings to appear or timeout after 10 seconds
+          await session.page.waitForSelector('li .mdc-card, .job-item, .mdc-card', { timeout: 10000 });
+          this.logger.debug('Job content detected, proceeding with scraping');
+        } catch (error) {
+          this.logger.warn('No job content detected after waiting, proceeding anyway');
+        }
       }
 
-      // Wait for network to be idle
-      await session.page.waitForLoadState('networkidle', {
-        timeout: antiDetection.networkIdleTimeout,
-      });
+      // Handle infinite scroll if requested
+      if (options?.infiniteScroll) {
+        await this.performInfiniteScroll(session.page);
+      }
 
       // Get page content and metadata
       const html = await session.page.content();
@@ -142,11 +121,6 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
       this.stats.totalRequests++;
       this.stats.totalLoadTime += loadTime;
       this.stats.successfulRequests++;
-
-      // Save session if it's been significantly used
-      if (session.requestCount % 5 === 0) {
-        await this.saveSession(session);
-      }
 
       this.logger.debug(`Successfully fetched ${url} in ${loadTime}ms`);
 
@@ -195,7 +169,6 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
     const session = this.sessions.get(sessionId);
     if (session) {
       try {
-        await this.saveSession(session);
         await session.context.close();
         this.sessions.delete(sessionId);
         this.logger.debug(`Session ${sessionId} closed`);
@@ -212,108 +185,6 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
     const sessionIds = Array.from(this.sessions.keys());
     await Promise.all(sessionIds.map(id => this.closeSession(id)));
     this.logger.log(`Closed ${sessionIds.length} sessions`);
-  }
-
-  /**
-   * Save session cookies to disk
-   */
-  async saveSession(session: IBrowserSession): Promise<void> {
-    try {
-      await fs.mkdir(this.sessionDir, { recursive: true });
-      
-      const sessionFile = join(this.sessionDir, `${session.config.siteName}-${session.id}.json`);
-      const cookies = await session.context.cookies();
-      
-      // Get storage state
-      const storageState = await session.context.storageState();
-
-      const persistenceData: SessionPersistenceData = {
-        cookies: cookies.map(cookie => ({
-          name: cookie.name,
-          value: cookie.value,
-          domain: cookie.domain,
-          path: cookie.path,
-          expires: cookie.expires,
-          httpOnly: cookie.httpOnly,
-          secure: cookie.secure,
-        })),
-        localStorage: storageState.origins.length > 0 && storageState.origins[0].localStorage ? 
-          storageState.origins[0].localStorage.reduce((acc, item) => ({ ...acc, [item.name]: item.value }), {}) : {},
-        sessionStorage: {}, // Session storage is not persisted by Playwright's storageState
-        createdAt: session.createdAt.getTime(),
-        lastUsed: Date.now(),
-        siteName: session.config.siteName,
-        userAgent: session.config.userAgent || '',
-      };
-
-      await fs.writeFile(sessionFile, JSON.stringify(persistenceData, null, 2));
-      this.logger.debug(`Session saved: ${sessionFile}`);
-      
-    } catch (error) {
-      this.logger.warn(`Failed to save session ${session.id}:`, error.message);
-    }
-  }
-
-  /**
-   * Load session cookies from disk
-   */
-  async loadSession(config: BrowserSessionConfig): Promise<IBrowserSession | null> {
-    try {
-      const sessionId = this.generateSessionId(config);
-      const sessionFile = join(this.sessionDir, `${config.siteName}-${sessionId}.json`);
-      
-      const data = await fs.readFile(sessionFile, 'utf8');
-      const persistenceData: SessionPersistenceData = JSON.parse(data);
-      
-      // Check if session is still valid (not too old)
-      const sessionAgeHours = (Date.now() - persistenceData.lastUsed) / (1000 * 60 * 60);
-      if (sessionAgeHours > 24) {
-        this.logger.debug(`Session ${sessionId} is too old, creating new one`);
-        return null;
-      }
-
-      // Create new session with loaded data
-      const session = await this.createNewSession(config, sessionId);
-      
-      // Restore cookies
-      if (persistenceData.cookies.length > 0) {
-        await session.context.addCookies(persistenceData.cookies.map(cookie => ({
-          name: cookie.name,
-          value: cookie.value,
-          domain: cookie.domain,
-          path: cookie.path,
-          expires: cookie.expires,
-          httpOnly: cookie.httpOnly,
-          secure: cookie.secure,
-          url: `https://${cookie.domain}`,
-        })));
-        
-        this.logger.debug(`Restored ${persistenceData.cookies.length} cookies for session ${sessionId}`);
-      }
-
-      return session;
-
-    } catch (error) {
-      this.logger.debug(`Could not load session for ${config.siteName}:`, error.message);
-      return null;
-    }
-  }
-
-  /**
-   * Rotate session (close current and create new)
-   */
-  async rotateSession(sessionId: string): Promise<IBrowserSession> {
-    const currentSession = this.sessions.get(sessionId);
-    if (!currentSession) {
-      throw new Error(`Session ${sessionId} not found`);
-    }
-
-    const config = currentSession.config;
-    await this.closeSession(sessionId);
-    
-    // Create new session with same config but new ID
-    const newSessionId = this.generateSessionId(config, true);
-    return this.createNewSession(config, newSessionId);
   }
 
   /**
@@ -339,7 +210,7 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
   /**
    * Create a new browser session
    */
-  private async createNewSession(config: BrowserSessionConfig, sessionId?: string): Promise<IBrowserSession> {
+  protected async createNewSession(config: BrowserSessionConfig, sessionId?: string): Promise<IBrowserSession> {
     const id = sessionId || this.generateSessionId(config);
     
     // Ensure browser is available
@@ -347,112 +218,95 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
       try {
         this.browser = await chromium.launch({
           headless: config.headless !== false, // Default to headless
-          executablePath: '/usr/lib/chromium/chromium',
           args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
-            '--disable-gpu',
-            '--single-process', // Important for Docker
-            '--disable-extensions',
-            '--disable-default-apps',
-            '--disable-background-timer-throttling',
-            '--disable-backgrounding-occluded-windows',
-            '--disable-renderer-backgrounding',
-            // Docker-specific fixes
-            '--disable-software-rasterizer',
-            '--disable-background-networking',
-            '--disable-default-apps',
-            '--disable-sync',
-            '--disable-translate',
-            '--hide-scrollbars',
-            '--mute-audio',
-            '--no-default-browser-check',
-            '--no-first-run',
-            '--disable-logging',
-            '--disable-permissions-api',
-            '--disable-presentation-api',
-            '--disable-remote-fonts',
-            '--disable-background-mode',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-web-security',
             '--disable-features=VizDisplayCompositor',
-            '--run-all-compositor-stages-before-draw',
-            '--disable-ipc-flooding-protection'
           ],
         });
         
-        this.logger.log('Browser instance created with stealth mode');
+        this.logger.log('Browser instance created with standard Playwright');
       } catch (error) {
         this.logger.error('Failed to launch browser instance:', error.message);
-        throw new Error(`Browser initialization failed for ${config.siteName}: ${error.message}. This site requires browser automation which is currently unavailable in this environment.`);
+        throw new Error(`Browser initialization failed for ${config.siteName}: ${error.message}. Browser automation is not available.`);
       }
     }
 
-    // Get stealth configuration
-    const stealthConfig = this.stealthConfig.getStealthConfig(config.siteName);
-    const userAgent = config.userAgent || this.stealthConfig.getRandomUserAgent();
-    const viewport = config.viewport || this.stealthConfig.getRandomViewport();
-    const languages = this.stealthConfig.getRandomLanguages();
-
-    // Create browser context with stealth settings
+    // Create browser context with enhanced DataDome bypass configuration
     const context = await this.browser.newContext({
-      userAgent,
-      viewport,
-      locale: languages[0],
-      timezoneId: 'Europe/Sofia', // Bulgarian timezone
+      userAgent: config.userAgent || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      viewport: config.viewport || { width: 1920, height: 1080 },
+      ignoreHTTPSErrors: true,
+      // Enhanced fingerprint spoofing
+      locale: 'en-US',
+      timezoneId: 'America/New_York',
       permissions: ['geolocation'],
-      geolocation: { latitude: 42.6977, longitude: 23.3219 }, // Sofia coordinates
-      proxy: config.proxy,
-      extraHTTPHeaders: this.stealthConfig.getRealisticHeaders(userAgent),
+      colorScheme: 'light',
+      reducedMotion: 'no-preference',
+      forcedColors: 'none',
+      // Add realistic browser features
+      extraHTTPHeaders: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'max-age=0',
+        'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="121", "Google Chrome";v="121"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+      },
     });
 
-    // Set languages
-    await context.addInitScript(`
-      Object.defineProperty(navigator, 'languages', {
-        get: function() { return ${JSON.stringify(languages)}; }
-      });
-    `);
+    const page = await context.newPage();
 
-    // Additional stealth measures
-    await context.addInitScript(`
-      // Remove webdriver property
+    // Enhanced stealth configuration
+    await page.addInitScript(() => {
+      // Override navigator.webdriver
       Object.defineProperty(navigator, 'webdriver', {
         get: () => undefined,
       });
       
-      // Spoof chrome object
-      window.chrome = {
+      // Override navigator.plugins
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [1, 2, 3, 4, 5],
+      });
+      
+      // Override navigator.languages
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['en-US', 'en'],
+      });
+      
+      // Add realistic screen properties
+      Object.defineProperty(screen, 'availHeight', {
+        get: () => 1040,
+      });
+      Object.defineProperty(screen, 'availWidth', {
+        get: () => 1920,
+      });
+      
+      // Override chrome runtime
+      (window as any).chrome = {
         runtime: {},
-        app: {
-          isInstalled: false,
-        },
+        loadTimes: function() {},
+        csi: function() {},
       };
       
-      // Spoof plugins
-      Object.defineProperty(navigator, 'plugins', {
-        get: function() {
-          return [
-            {
-              0: {
-                type: "application/x-google-chrome-pdf",
-                suffixes: "pdf",
-                description: "Portable Document Format"
-              },
-              description: "Portable Document Format",
-              filename: "internal-pdf-viewer",
-              length: 1,
-              name: "Chrome PDF Plugin"
-            }
-          ];
-        },
-      });
-    `);
+      // Remove automation indicators
+      try {
+        delete (window.navigator as any).__proto__.webdriver;
+      } catch (e) {
+        // Ignore errors when trying to delete webdriver property
+      }
+    });
 
-    const page = await context.newPage();
-
-    // Block unnecessary resources for better performance
+    // Block unnecessary resources for better performance and stealth
     if (config.loadImages === false) {
       await page.route('**/*', (route) => {
         const resourceType = route.request().resourceType();
@@ -482,36 +336,122 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
   }
 
   /**
-   * Simulate human-like behavior on the page
+   * Save session (simplified - no disk persistence)
    */
-  private async simulateHumanBehavior(page: Page, viewport?: { width: number; height: number }): Promise<void> {
-    try {
-      const actualViewport = viewport || await page.viewportSize() || { width: 1366, height: 768 };
-      
-      // Random scroll
-      const scrollDistance = Math.floor(Math.random() * 500) + 100;
-      await page.evaluate((distance) => {
-        window.scrollBy(0, distance);
-      }, scrollDistance);
+  async saveSession(session: IBrowserSession): Promise<void> {
+    // In simplified implementation, sessions are already managed in memory
+    this.logger.debug(`Session ${session.id} state maintained in memory`);
+  }
 
-      // Small delay
-      await this.sleep(Math.random() * 1000 + 500);
+  /**
+   * Load session (simplified - returns null since we don't persist to disk)
+   */
+  async loadSession(config: BrowserSessionConfig): Promise<IBrowserSession | null> {
+    // In simplified implementation, we don't persist sessions to disk
+    return null;
+  }
 
-      // Scroll back up slightly
-      await page.evaluate(() => {
-        window.scrollBy(0, -Math.floor(Math.random() * 200) - 50);
-      });
-
-    } catch (error) {
-      // Non-critical, don't throw
-      this.logger.debug('Could not simulate human behavior:', error.message);
+  /**
+   * Rotate session (close current and create new)
+   */
+  async rotateSession(sessionId: string): Promise<IBrowserSession> {
+    const currentSession = this.sessions.get(sessionId);
+    if (!currentSession) {
+      throw new Error(`Session ${sessionId} not found`);
     }
+
+    const config = currentSession.config;
+    await this.closeSession(sessionId);
+    
+    // Create new session with same config but new ID
+    const newSessionId = this.generateSessionId(config, true);
+    return this.createNewSession(config, newSessionId);
+  }
+
+  /**
+   * Enhanced infinite scroll with human-like behavior
+   */
+  private async performInfiniteScroll(page: Page): Promise<void> {
+    this.logger.debug('Starting enhanced infinite scroll to load all jobs');
+    
+    let previousHeight = 0;
+    let currentHeight = await page.evaluate(() => document.body.scrollHeight);
+    let attempts = 0;
+    const maxAttempts = 15; // Reduced to prevent detection
+    const scrollStep = 0.8; // Scroll to 80% instead of bottom
+    
+    while (previousHeight !== currentHeight && attempts < maxAttempts) {
+      previousHeight = currentHeight;
+      
+      // Human-like scroll behavior - scroll gradually
+      const targetHeight = currentHeight * scrollStep;
+      await page.evaluate((target) => {
+        const currentScroll = window.pageYOffset;
+        const step = (target - currentScroll) / 10;
+        let scrolls = 0;
+        
+        const smoothScroll = () => {
+          if (scrolls < 10) {
+            window.scrollBy(0, step);
+            scrolls++;
+            setTimeout(smoothScroll, 50 + Math.random() * 50);
+          }
+        };
+        smoothScroll();
+      }, targetHeight);
+      
+      // Random wait time to simulate human reading
+      const waitTime = 2000 + Math.random() * 3000;
+      await page.waitForTimeout(waitTime);
+      
+      // Scroll to actual bottom
+      await page.evaluate(() => {
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      
+      // Wait for new content with jitter
+      await page.waitForTimeout(1500 + Math.random() * 1000);
+      
+      // Check new height
+      currentHeight = await page.evaluate(() => document.body.scrollHeight);
+      attempts++;
+      
+      this.logger.debug(`Enhanced scroll attempt ${attempts}: height ${previousHeight} -> ${currentHeight}`);
+      
+      // Add small mouse movements to simulate engagement
+      if (attempts % 3 === 0) {
+        await page.mouse.move(
+          Math.random() * 300 + 100,
+          Math.random() * 300 + 100
+        );
+      }
+    }
+    
+    if (attempts >= maxAttempts) {
+      this.logger.warn('Enhanced infinite scroll stopped due to max attempts reached');
+    } else {
+      this.logger.debug(`Enhanced infinite scroll completed in ${attempts} attempts`);
+    }
+    
+    // Gradually scroll back to top with human-like behavior
+    await page.evaluate(() => {
+      const scrollToTop = () => {
+        const currentScroll = window.pageYOffset;
+        if (currentScroll > 0) {
+          window.scrollTo(0, currentScroll - currentScroll * 0.1);
+          setTimeout(scrollToTop, 50);
+        }
+      };
+      scrollToTop();
+    });
+    
+    await page.waitForTimeout(1000 + Math.random() * 500);
   }
 
   /**
    * Generate session ID based on configuration
    */
-  private generateSessionId(config: BrowserSessionConfig, forceNew = false): string {
+  protected generateSessionId(config: BrowserSessionConfig, forceNew = false): string {
     const baseStr = `${config.siteName}-${config.userAgent || 'default'}-${config.headless}`;
     
     if (forceNew) {
@@ -519,12 +459,5 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
     }
     
     return crypto.createHash('md5').update(baseStr).digest('hex').substring(0, 8);
-  }
-
-  /**
-   * Sleep utility
-   */
-  private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }
