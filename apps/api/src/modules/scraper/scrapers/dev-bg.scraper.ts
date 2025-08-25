@@ -177,7 +177,7 @@ export class DevBgScraper extends BaseScraper {
         }
         
         currentPage++;
-        await this.delay(this.requestDelay);
+        await this.delay(this.siteConfig.requestDelay);
         
       } catch (error) {
         this.logger.error(`Error scraping page ${currentPage}:`, error.message);

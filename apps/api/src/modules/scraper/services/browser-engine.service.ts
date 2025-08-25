@@ -97,9 +97,9 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
   }
 
   /**
-   * Enhanced page fetching with stealth capabilities
+   * Fetch a page using browser automation with optional stealth and infinite scroll
    */
-  async fetchPageWithStealth(url: string, session: IBrowserSession, options?: { infiniteScroll?: boolean; warmup?: boolean; stealth?: boolean }): Promise<BrowserScrapingResponse> {
+  async fetchPage(url: string, session: IBrowserSession, options?: { infiniteScroll?: boolean; stealth?: boolean; warmup?: boolean }): Promise<BrowserScrapingResponse> {
     // If stealth mode is enabled, perform enhanced behavior
     if (options?.stealth) {
       try {
@@ -117,14 +117,6 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
         this.logger.debug('Stealth behavior simulation error (non-critical):', error.message);
       }
     }
-    
-    return this.fetchPage(url, session, options);
-  }
-
-  /**
-   * Fetch a page using browser automation with optional infinite scroll
-   */
-  async fetchPage(url: string, session: IBrowserSession, options?: { infiniteScroll?: boolean }): Promise<BrowserScrapingResponse> {
     const startTime = Date.now();
     
     try {
@@ -206,6 +198,8 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
 
     } catch (_error) {
       const loadTime = Date.now() - startTime;
+      
+      // Update statistics in finally block to ensure proper cleanup
       this.stats.totalRequests++;
       this.stats.totalLoadTime += loadTime;
 
@@ -221,6 +215,11 @@ export class BrowserEngineService implements IBrowserEngine, OnModuleDestroy {
         loadTime,
         cookies: [],
       };
+    } finally {
+      // Ensure session is properly updated even on error
+      if (session) {
+        session.lastActivity = new Date();
+      }
     }
   }
 

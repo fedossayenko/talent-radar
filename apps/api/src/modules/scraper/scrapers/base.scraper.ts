@@ -13,6 +13,7 @@ import {
   IBrowserSession,
 } from '../interfaces/browser-scraper.interface';
 import { BrowserEngineService } from '../services/browser-engine.service';
+import { ScraperConfigHelper } from '../utils/config.helper';
 
 /**
  * Abstract base class for all job scrapers
@@ -23,11 +24,7 @@ export abstract class BaseScraper implements IJobScraper {
   protected readonly logger = new Logger(this.constructor.name);
   
   // Common configuration
-  protected readonly requestTimeout: number;
-  protected readonly requestDelay: number;
-  protected readonly maxRetries: number;
-  protected readonly userAgent: string;
-  protected readonly useHttpFallback: boolean;
+  protected readonly siteConfig: ReturnType<typeof ScraperConfigHelper.getSiteConfig>;
   
   // Browser session for this scraper
   protected browserSession: IBrowserSession | null = null;
@@ -37,45 +34,13 @@ export abstract class BaseScraper implements IJobScraper {
     protected readonly siteName: string,
     protected readonly browserEngine?: BrowserEngineService,
   ) {
-    // Load common configuration with site-specific prefixes
-    const siteKey = this.convertSiteNameToConfigKey(siteName);
-    this.requestTimeout = this.configService.get<number>(`scraper.sites.${siteKey}.requestTimeout`, 30000);
-    this.requestDelay = this.configService.get<number>(`scraper.sites.${siteKey}.requestDelay`, 2000);
-    this.maxRetries = this.configService.get<number>(`scraper.sites.${siteKey}.maxRetries`, 3);
-    this.userAgent = this.configService.get<string>(`scraper.sites.${siteKey}.userAgent`, 'TalentRadar/1.0 (Job Aggregator)');
-    this.useHttpFallback = this.configService.get<boolean>(`scraper.sites.${siteKey}.useHttpFallback`, true);
+    // Load configuration using centralized helper
+    this.siteConfig = ScraperConfigHelper.getSiteConfig(configService, siteName);
     
     // Validate essential configuration
-    this.validateConfiguration(siteKey);
+    ScraperConfigHelper.validateSiteConfiguration(configService, siteName);
   }
 
-  /**
-   * Convert site name to configuration key (e.g., 'dev.bg' -> 'devBg', 'jobs.bg' -> 'jobsBg')
-   */
-  private convertSiteNameToConfigKey(siteName: string): string {
-    return siteName
-      .replace(/[.-]/g, '') // Remove dots and dashes
-      .replace(/bg$/i, 'Bg'); // Capitalize 'Bg' suffix
-  }
-
-  /**
-   * Validate essential scraper configuration to ensure proper setup
-   */
-  private validateConfiguration(siteKey: string): void {
-    const baseUrl = this.configService.get<string>(`scraper.sites.${siteKey}.baseUrl`);
-    const searchUrl = this.configService.get<string>(`scraper.sites.${siteKey}.searchUrl`) || 
-                      this.configService.get<string>(`scraper.sites.${siteKey}.apiUrl`);
-    
-    if (!baseUrl) {
-      throw new Error(`Missing required configuration: scraper.sites.${siteKey}.baseUrl for site ${this.siteName}`);
-    }
-    
-    if (!searchUrl) {
-      throw new Error(`Missing required configuration: scraper.sites.${siteKey}.searchUrl or apiUrl for site ${this.siteName}`);
-    }
-    
-    this.logger.debug(`Configuration validated for ${this.siteName}: baseUrl=${baseUrl}, searchUrl=${searchUrl}`);
-  }
 
   /**
    * Abstract methods that must be implemented by concrete scrapers
@@ -97,7 +62,7 @@ export abstract class BaseScraper implements IJobScraper {
     const { useBrowser = true, forceBrowser = false } = options;
     
     // Try HTTP first if fallback is enabled and not forced to use browser
-    if (!forceBrowser && this.useHttpFallback && !useBrowser) {
+    if (!forceBrowser && this.siteConfig.useHttpFallback && !useBrowser) {
       try {
         this.logger.debug(`Trying HTTP request first for: ${url}`);
         const httpResponse = await this.makeHttpRequest(url);
@@ -148,8 +113,8 @@ export abstract class BaseScraper implements IJobScraper {
         const sessionConfig: BrowserSessionConfig = {
           siteName: this.siteName,
           headless: this.configService.get<boolean>('scraper.browser.headless', true),
-          timeout: this.requestTimeout,
-          userAgent: this.userAgent,
+          timeout: this.siteConfig.requestTimeout,
+          userAgent: this.siteConfig.userAgent,
           loadImages: this.configService.get<boolean>('scraper.browser.loadImages', false),
           stealth: this.configService.get<boolean>('scraper.browser.stealth', true),
         };
@@ -190,13 +155,13 @@ export abstract class BaseScraper implements IJobScraper {
     
     let lastError: Error;
     
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+    for (let attempt = 1; attempt <= this.siteConfig.maxRetries; attempt++) {
       try {
-        this.logger.debug(`Making HTTP request to ${url} (attempt ${attempt}/${this.maxRetries})`);
+        this.logger.debug(`Making HTTP request to ${url} (attempt ${attempt}/${this.siteConfig.maxRetries})`);
         
         const response = await axios.get(url, {
           headers: {
-            'User-Agent': this.userAgent,
+            'User-Agent': this.siteConfig.userAgent,
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate, br',
@@ -204,13 +169,13 @@ export abstract class BaseScraper implements IJobScraper {
             'Upgrade-Insecure-Requests': '1',
             ...options.headers,
           },
-          timeout: this.requestTimeout,
+          timeout: this.siteConfig.requestTimeout,
           ...options,
         });
         
         // Rate limiting: wait between requests
-        if (attempt < this.maxRetries) {
-          await this.delay(this.requestDelay);
+        if (attempt < this.siteConfig.maxRetries) {
+          await this.delay(this.siteConfig.requestDelay);
         }
         
         return response;
@@ -221,17 +186,17 @@ export abstract class BaseScraper implements IJobScraper {
         
         // If it's a rate limiting error, wait longer
         if (error.response?.status === 429) {
-          const waitTime = this.requestDelay * Math.pow(2, attempt); // Exponential backoff
+          const waitTime = this.siteConfig.requestDelay * Math.pow(2, attempt); // Exponential backoff
           this.logger.warn(`Rate limited, waiting ${waitTime}ms before retry`);
           await this.delay(waitTime);
-        } else if (attempt < this.maxRetries) {
+        } else if (attempt < this.siteConfig.maxRetries) {
           // Regular retry delay
-          await this.delay(this.requestDelay * attempt);
+          await this.delay(this.siteConfig.requestDelay * attempt);
         }
       }
     }
     
-    throw new Error(`Failed to fetch ${url} after ${this.maxRetries} attempts: ${lastError.message}`);
+    throw new Error(`Failed to fetch ${url} after ${this.siteConfig.maxRetries} attempts: ${lastError.message}`);
   }
   
   /**

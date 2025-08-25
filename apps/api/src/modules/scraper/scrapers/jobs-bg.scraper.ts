@@ -468,7 +468,7 @@ export class JobsBgScraper extends BaseScraper {
       });
 
       // Use stealth browser with warm-up and behavior simulation
-      return await this.browserEngine.fetchPageWithStealth(url, session, {
+      return await this.browserEngine.fetchPage(url, session, {
         ...options,
         stealth: true,
       });

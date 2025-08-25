@@ -20,24 +20,19 @@ export class ScraperRegistryService implements OnModuleInit {
     private readonly jobsBgScraper: JobsBgScraper,
   ) {
     this.enabledSites = this.configService.get<string[]>('scraper.enabledSites', ['dev.bg', 'jobs.bg']);
-    this.logger.log('ScraperRegistryService constructor called');
-    this.logger.log(`Enabled sites from config: ${this.enabledSites.join(', ')}`);
   }
 
   onModuleInit() {
-    this.logger.log('Starting scraper registry initialization...');
-    this.logger.log(`Global scraper enabled: ${this.configService.get<boolean>('scraper.enabled', true)}`);
-    this.logger.log(`Configured enabled sites: ${this.enabledSites.join(', ')}`);
+    this.logger.log('Initializing scraper registry...');
     
     this.registerScrapers();
     
-    this.logger.log(`Scraper registry initialization completed with ${this.scrapers.size} scrapers`);
-    this.logger.log(`Successfully registered sites: ${Array.from(this.scrapers.keys()).join(', ')}`);
+    this.logger.log(`Registry initialized with ${this.scrapers.size} scrapers: [${Array.from(this.scrapers.keys()).join(', ')}]`);
     
     // Log any missing scrapers
     const missingSites = this.enabledSites.filter(site => !this.scrapers.has(site));
     if (missingSites.length > 0) {
-      this.logger.warn(`Sites enabled but not registered: ${missingSites.join(', ')}`);
+      this.logger.warn(`Missing scrapers for enabled sites: ${missingSites.join(', ')}`);
     }
   }
 
@@ -45,55 +40,38 @@ export class ScraperRegistryService implements OnModuleInit {
    * Register all available scrapers
    */
   private registerScrapers(): void {
-    this.logger.log('Starting to register scrapers...');
-    this.logger.log(`Available scrapers in constructor: devBgScraper=${!!this.devBgScraper}, jobsBgScraper=${!!this.jobsBgScraper}`);
-    
     // Register dev.bg scraper
-    try {
-      this.logger.log('Attempting to register dev.bg scraper...');
-      if (this.isScraperEnabled('dev.bg')) {
+    if (this.isScraperEnabled('dev.bg')) {
+      try {
         this.scrapers.set('dev.bg', this.devBgScraper);
-        this.logger.log('✓ Successfully registered dev.bg scraper');
-      } else {
-        this.logger.log('✗ dev.bg scraper disabled in configuration');
+        this.logger.debug('Registered dev.bg scraper');
+      } catch (error) {
+        this.logger.error('Failed to register dev.bg scraper:', error.message);
       }
-    } catch (error) {
-      this.logger.error('✗ Failed to register dev.bg scraper:', error.message);
-      this.logger.error('Error stack:', error.stack);
     }
 
     // Register jobs.bg scraper
-    try {
-      this.logger.log('Attempting to register jobs.bg scraper...');
-      if (this.isScraperEnabled('jobs.bg')) {
+    if (this.isScraperEnabled('jobs.bg')) {
+      try {
         this.scrapers.set('jobs.bg', this.jobsBgScraper);
-        this.logger.log('✓ Successfully registered jobs.bg scraper');
-      } else {
-        this.logger.log('✗ jobs.bg scraper disabled in configuration');
+        this.logger.debug('Registered jobs.bg scraper');
+      } catch (error) {
+        this.logger.error('Failed to register jobs.bg scraper:', error.message);
       }
-    } catch (error) {
-      this.logger.error('✗ Failed to register jobs.bg scraper:', error.message);
-      this.logger.error('Error stack:', error.stack);
     }
-    
-    this.logger.log(`Registration completed. Total scrapers registered: ${this.scrapers.size}`);
   }
 
   /**
    * Get scraper by site name
    */
   getScraper(siteName: string): IJobScraper | null {
-    this.logger.log(`getScraper called for site: ${siteName}`);
-    this.logger.log(`Available scrapers: [${Array.from(this.scrapers.keys()).join(', ')}]`);
-    this.logger.log(`Total registered scrapers: ${this.scrapers.size}`);
-    
     const scraper = this.scrapers.get(siteName);
     if (!scraper) {
       this.logger.warn(`No scraper found for site: ${siteName}`);
       return null;
     }
     
-    this.logger.log(`Found scraper for ${siteName}: ${scraper.constructor.name}`);
+    this.logger.debug(`Using scraper for ${siteName}: ${scraper.constructor.name}`);
     return scraper;
   }
 
