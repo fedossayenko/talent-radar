@@ -53,6 +53,7 @@
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
     "express-rate-limit": "^8.0.1",
+    "ghost-cursor": "^1.4.1",
     "helmet": "^8.1.0",
     "ioredis": "^5.7.0",
     "lodash": "^4.17.21",
@@ -62,6 +63,8 @@
     "passport-jwt": "^4.0.1",
     "playwright": "^1.54.2",
     "prisma": "^6.14.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "redis": "^5.8.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
@@ -112,7 +115,9 @@
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
     },
-    "setupFilesAfterEnv": ["<rootDir>/test/test-utils/jest.setup.ts"],
+    "setupFilesAfterEnv": [
+      "<rootDir>/test/test-utils/jest.setup.ts"
+    ],
     "collectCoverageFrom": [
       "**/*.(t|j)s",
       "!**/*.spec.ts",

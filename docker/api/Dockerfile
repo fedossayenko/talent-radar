@@ -1,23 +1,17 @@
 # TalentRadar API Dockerfile
 
-FROM node:22-alpine AS base
+FROM node:22-slim AS base
 
-# Install system dependencies
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
+# Install system dependencies for Playwright
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    gnupg \
     ca-certificates \
-    ttf-freefont \
-    curl
+    && rm -rf /var/lib/apt/lists/*
 
-# Set Playwright to use installed Chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-ENV PLAYWRIGHT_BROWSERS_PATH=/usr/bin
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+# Install Playwright system dependencies
+RUN npx --yes playwright@1.54.2 install-deps chromium
 
 # Create app directory
 WORKDIR /app
@@ -37,6 +31,9 @@ FROM base AS development
 # Install all dependencies including dev dependencies
 RUN npm ci
 RUN npm install -g @nestjs/cli
+
+# Install Playwright browsers
+RUN npx playwright install chromium --with-deps
 
 # Copy workspace source code
 COPY apps/ ./apps/
@@ -84,8 +81,8 @@ COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/package*.json ./apps/api/
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
+RUN groupadd -g 1001 nodejs
+RUN useradd -r -u 1001 -g nodejs nextjs
 
 # Change ownership
 RUN chown -R nextjs:nodejs /app

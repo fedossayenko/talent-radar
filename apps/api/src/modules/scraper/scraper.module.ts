@@ -1,62 +1,69 @@
 import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bull';
 import { ConfigModule } from '@nestjs/config';
-import { ScraperService } from './scraper.service';
+
+// Services
+import { ScraperRegistryService } from './services/scraper-registry.service';
+
+// Scrapers
 import { DevBgScraper } from './scrapers/dev-bg.scraper';
-import { ScraperProcessor } from './processors/scraper.processor';
-import { ScraperScheduler } from './scraper.scheduler';
-import { ScraperController } from './scraper.controller';
+import { JobsBgScraper } from './scrapers/jobs-bg.scraper';
+
+// Support services
 import { TranslationService } from './services/translation.service';
 import { JobParserService } from './services/job-parser.service';
 import { TechPatternService } from './services/tech-pattern.service';
 import { ContentExtractorService } from './services/content-extractor.service';
 import { HtmlCleanerService } from './services/html-cleaner.service';
-import { AiProcessingPipelineService } from './services/ai-processing-pipeline.service';
-import { CompanyProfileScraper } from './services/company-profile.scraper';
-import { CompanyValidationService } from './services/company-validation.service';
-import { DevBgCompanyExtractor } from './services/devbg-company-extractor.service';
-import { VacancyModule } from '../vacancy/vacancy.module';
-import { CompanyModule } from '../company/company.module';
-import { AiModule } from '../ai/ai.module';
+
+// Unified browser service
+import { BrowserEngineService } from './services/browser-engine.service';
+
+// Controllers
+import { ScraperController } from './scraper.controller';
+
+// External modules
 import { DatabaseModule } from '../../common/database/database.module';
 import scraperConfig from '../../config/scraper.config';
 
+/**
+ * Simplified Scraper Module
+ * 
+ * Features:
+ * - Direct scraper access via registry
+ * - Support for dev.bg and jobs.bg
+ * - Clean, single-endpoint architecture
+ */
 @Module({
   imports: [
     ConfigModule.forFeature(scraperConfig),
     DatabaseModule,
-    VacancyModule,
-    CompanyModule,
-    AiModule,
-    BullModule.registerQueue({
-      name: 'scraper',
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 2000,
-        },
-        removeOnComplete: 100,
-        removeOnFail: 50,
-      },
-    }),
   ],
-  controllers: [ScraperController],
+  controllers: [
+    ScraperController,
+  ],
   providers: [
-    ScraperService,
+    // === Core Services ===
+    ScraperRegistryService,
+
+    // === Unified Browser Service ===
+    BrowserEngineService,
+
+    // === Scrapers ===
     DevBgScraper,
-    ScraperProcessor,
-    ScraperScheduler,
+    JobsBgScraper,
+
+    // === Shared Services ===
     TranslationService,
     JobParserService,
     TechPatternService,
     ContentExtractorService,
     HtmlCleanerService,
-    AiProcessingPipelineService,
-    CompanyProfileScraper,
-    CompanyValidationService,
-    DevBgCompanyExtractor,
   ],
-  exports: [ScraperService, ScraperScheduler, ScraperProcessor, ContentExtractorService, HtmlCleanerService, AiProcessingPipelineService],
+  exports: [
+    ScraperRegistryService,
+    BrowserEngineService,
+    ContentExtractorService,
+    HtmlCleanerService,
+  ],
 })
 export class ScraperModule {}

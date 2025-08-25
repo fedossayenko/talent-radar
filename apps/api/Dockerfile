@@ -1,5 +1,13 @@
 # Multi-stage build for production optimization
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
+
+# Install system dependencies for build stage
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    gnupg \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -10,6 +18,9 @@ COPY apps/api/package.json ./apps/api/
 
 # Install all dependencies (including dev dependencies for building)
 RUN npm install
+
+# Install Playwright browsers for build stage
+RUN npx playwright install chromium --with-deps
 
 # Copy source code
 COPY apps/api ./apps/api
@@ -25,14 +36,21 @@ RUN npm run build
 RUN npm prune --production
 
 # Production stage
-FROM node:22-alpine AS production
+FROM node:22-slim AS production
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Install system dependencies for production
+RUN apt-get update && apt-get install -y \
+    wget \
+    curl \
+    dumb-init \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Playwright system dependencies
+RUN npx --yes playwright@1.54.2 install-deps chromium
 
 # Create app user for security
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nestjs -u 1001
+RUN groupadd -g 1001 nodejs
+RUN useradd -r -u 1001 -g nodejs nestjs
 
 # Set working directory
 WORKDIR /app
