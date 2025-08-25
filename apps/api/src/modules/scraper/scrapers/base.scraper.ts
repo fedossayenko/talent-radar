@@ -136,7 +136,7 @@ export abstract class BaseScraper implements IJobScraper {
   /**
    * Fetch page using browser automation
    */
-  protected async fetchWithBrowser(url: string): Promise<BrowserScrapingResponse> {
+  protected async fetchWithBrowser(url: string, options?: { infiniteScroll?: boolean }): Promise<BrowserScrapingResponse> {
     if (!this.browserEngine) {
       throw new Error('Browser engine not available for browser-based scraping');
     }
@@ -157,7 +157,7 @@ export abstract class BaseScraper implements IJobScraper {
         this.logger.debug(`Created browser session for ${this.siteName}`);
       }
       
-      return await this.browserEngine.fetchPage(url, this.browserSession);
+      return await this.browserEngine.fetchPage(url, this.browserSession, options);
       
     } catch (error) {
       this.logger.error(`Browser fetch failed for ${url}:`, error.message);
@@ -169,7 +169,7 @@ export abstract class BaseScraper implements IJobScraper {
           this.logger.debug(`Rotated browser session for ${this.siteName}`);
           
           // Retry with new session
-          return await this.browserEngine.fetchPage(url, this.browserSession);
+          return await this.browserEngine.fetchPage(url, this.browserSession, options);
         } catch (rotateError) {
           this.logger.error(`Session rotation failed:`, rotateError.message);
         }
