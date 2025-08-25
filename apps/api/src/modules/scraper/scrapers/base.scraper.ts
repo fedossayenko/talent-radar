@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import axios from 'axios';
 import {
   IJobScraper,
   ScraperOptions,
@@ -186,7 +187,6 @@ export abstract class BaseScraper implements IJobScraper {
   protected async makeHttpRequest(url: string, options: any = {}): Promise<any> {
     // This is a simplified HTTP implementation for fallback
     // Will be removed once all scrapers are migrated to browser-first approach
-    const axios = require('axios');
     
     let lastError: Error;
     

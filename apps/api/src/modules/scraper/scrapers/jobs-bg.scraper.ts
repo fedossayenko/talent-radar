@@ -10,7 +10,7 @@ import {
   ScrapingResult,
   JobDetails,
 } from '../interfaces/job-scraper.interface';
-import { StealthBrowserEngineService } from '../services/stealth-browser-engine.service';
+import { BrowserEngineService } from '../services/browser-engine.service';
 
 /**
  * Jobs.bg job scraper implementation
@@ -24,9 +24,9 @@ export class JobsBgScraper extends BaseScraper {
 
   constructor(
     configService: ConfigService,
-    private readonly stealthBrowserEngine: StealthBrowserEngineService
+    protected readonly browserEngine: BrowserEngineService
   ) {
-    super(configService, 'jobs.bg', stealthBrowserEngine);
+    super(configService, 'jobs.bg', browserEngine);
     
     this.baseUrl = this.configService.get<string>('scraper.sites.jobsBg.baseUrl', 'https://www.jobs.bg');
     this.searchUrl = this.configService.get<string>('scraper.sites.jobsBg.searchUrl', 'https://www.jobs.bg/en/front_job_search.php');
@@ -456,10 +456,11 @@ export class JobsBgScraper extends BaseScraper {
    */
   private async fetchWithStealthBrowser(url: string, options?: { infiniteScroll?: boolean, warmup?: boolean }) {
     try {
-      // Get stealth browser session
-      const session = await this.stealthBrowserEngine.getSession({
+      // Get browser session with stealth mode enabled
+      const session = await this.browserEngine.getSession({
         siteName: 'jobs.bg',
         headless: true,
+        stealth: true, // Enable stealth mode for jobs.bg
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         viewport: { width: 1920, height: 1080 },
         loadImages: false,
@@ -467,7 +468,10 @@ export class JobsBgScraper extends BaseScraper {
       });
 
       // Use stealth browser with warm-up and behavior simulation
-      return await this.stealthBrowserEngine.fetchPageWithWarmup(url, session, options);
+      return await this.browserEngine.fetchPageWithStealth(url, session, {
+        ...options,
+        stealth: true,
+      });
       
     } catch (error) {
       this.logger.error(`Stealth browser fetch failed: ${error.message}`);

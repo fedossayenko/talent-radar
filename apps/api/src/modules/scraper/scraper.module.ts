@@ -15,9 +15,8 @@ import { TechPatternService } from './services/tech-pattern.service';
 import { ContentExtractorService } from './services/content-extractor.service';
 import { HtmlCleanerService } from './services/html-cleaner.service';
 
-// Modern browser services
+// Unified browser service
 import { BrowserEngineService } from './services/browser-engine.service';
-import { StealthBrowserEngineService } from './services/stealth-browser-engine.service';
 
 // Controllers
 import { ScraperController } from './scraper.controller';
@@ -46,9 +45,8 @@ import scraperConfig from '../../config/scraper.config';
     // === Core Services ===
     ScraperRegistryService,
 
-    // === Modern Browser Services ===
+    // === Unified Browser Service ===
     BrowserEngineService,
-    StealthBrowserEngineService,
 
     // === Scrapers ===
     DevBgScraper,
@@ -64,7 +62,6 @@ import scraperConfig from '../../config/scraper.config';
   exports: [
     ScraperRegistryService,
     BrowserEngineService,
-    StealthBrowserEngineService,
     ContentExtractorService,
     HtmlCleanerService,
   ],

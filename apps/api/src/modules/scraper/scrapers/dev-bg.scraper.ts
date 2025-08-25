@@ -30,19 +30,13 @@ export class DevBgScraper extends BaseScraper {
     private readonly techPatternService: TechPatternService,
     browserEngine?: BrowserEngineService,
   ) {
-    try {
-      console.log('DevBgScraper constructor starting...');
-      super(configService, 'dev.bg', browserEngine);
-      
-      this.baseUrl = this.configService.get<string>('scraper.devBg.baseUrl', 'https://dev.bg');
-      this.apiUrl = this.configService.get<string>('scraper.devBg.apiUrl', 'https://dev.bg/company/jobs/java/');
-      this.maxPages = this.configService.get<number>('scraper.devBg.maxPages', 10);
-      
-      console.log('DevBgScraper constructor completed successfully');
-    } catch (error) {
-      console.error('DevBgScraper constructor failed:', error);
-      throw error;
-    }
+    super(configService, 'dev.bg', browserEngine);
+    
+    this.baseUrl = this.configService.get<string>('scraper.devBg.baseUrl', 'https://dev.bg');
+    this.apiUrl = this.configService.get<string>('scraper.devBg.apiUrl', 'https://dev.bg/company/jobs/java/');
+    this.maxPages = this.configService.get<number>('scraper.devBg.maxPages', 10);
+    
+    this.logger.log('DevBgScraper constructor completed successfully');
   }
 
   async scrapeJobs(options: ScraperOptions = {}): Promise<ScrapingResult> {

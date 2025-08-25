@@ -2,7 +2,6 @@ import { Controller, Post, Get, Logger, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { ScraperRegistryService } from './services/scraper-registry.service';
 import { Public } from '../../auth/decorators/public.decorator';
-import { JobListing } from './interfaces/job-scraper.interface';
 
 @ApiTags('scraper')
 @Controller({ path: 'scraper', version: '1' })

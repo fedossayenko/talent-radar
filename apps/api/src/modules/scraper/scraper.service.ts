@@ -5,19 +5,17 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../common/database/prisma.service';
 import { VacancyService } from '../vacancy/vacancy.service';
 import { CompanyService } from '../company/company.service';
-import { ScraperFactoryService } from './services/scraper-factory.service';
-import { DuplicateDetectorService } from './services/duplicate-detector.service';
-import { CompanyMatcherService } from './services/company-matcher.service';
+import { ScraperRegistryService } from './services/scraper-registry.service';
 import { 
   ScraperOptions, 
-  JobListing 
+  JobListing,
+  ScrapingResult 
 } from './interfaces/job-scraper.interface';
 
 export interface EnhancedScrapingOptions extends ScraperOptions {
   sites?: string[]; // Specific sites to scrape
   enableAiExtraction?: boolean;
   enableCompanyAnalysis?: boolean;
-  enableDuplicateDetection?: boolean;
   force?: boolean;
 }
 
@@ -26,10 +24,8 @@ export interface EnhancedScrapingResult {
   newVacancies: number;
   updatedVacancies: number;
   newCompanies: number;
-  duplicatesDetected: number;
-  companiesMatched: number;
   sitesScraped: string[];
-  siteResults: Record<string, any>;
+  siteResults: Record<string, ScrapingResult>;
   errors: string[];
   duration: number;
 }
@@ -43,8 +39,8 @@ export interface ScrapingStats {
 }
 
 /**
- * Enhanced scraper service that supports multiple job sites
- * with intelligent duplicate detection and company matching
+ * Simplified scraper service that supports multiple job sites
+ * using the scraper registry directly
  */
 @Injectable()
 export class ScraperService {
@@ -52,43 +48,37 @@ export class ScraperService {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly scraperFactory: ScraperFactoryService,
-    private readonly duplicateDetector: DuplicateDetectorService,
-    private readonly companyMatcher: CompanyMatcherService,
+    private readonly scraperRegistry: ScraperRegistryService,
     private readonly vacancyService: VacancyService,
     private readonly companyService: CompanyService,
     private readonly prisma: PrismaService,
     @InjectQueue('scraper') private readonly scraperQueue: Queue,
   ) {
-    this.logger.log('Enhanced ScraperService initialized');
+    this.logger.log('Simplified ScraperService initialized');
   }
 
   /**
    * Scrape jobs from all enabled sites or specific sites
    */
   async scrapeAllSites(options: EnhancedScrapingOptions = {}): Promise<EnhancedScrapingResult> {
-    this.logger.log('🔥 SCRAPE ALL SITES CALLED 🔥');
-    console.log('🔥 SCRAPE ALL SITES CALLED 🔥');
+    this.logger.log('Starting multi-site scraping process');
     
     const { 
       sites,
       enableAiExtraction = true, 
       enableCompanyAnalysis = true,
-      enableDuplicateDetection = true,
       force = false,
       ...scraperOptions 
     } = options;
 
     const startTime = Date.now();
-    this.logger.log(`Starting enhanced scraping process for sites: ${sites?.join(', ') || 'all enabled'}`);
+    this.logger.log(`Starting scraping process for sites: ${sites?.join(', ') || 'all enabled'}`);
 
     const result: EnhancedScrapingResult = {
       totalJobsFound: 0,
       newVacancies: 0,
       updatedVacancies: 0,
       newCompanies: 0,
-      duplicatesDetected: 0,
-      companiesMatched: 0,
       sitesScraped: [],
       siteResults: {},
       errors: [],
@@ -96,37 +86,48 @@ export class ScraperService {
     };
 
     try {
-      this.logger.log('🔥 About to call scraperFactory.scrapeMultipleSites 🔥');
-      console.log('🔥 About to call scraperFactory.scrapeMultipleSites 🔥');
-      
-      // Use factory to scrape multiple sites
-      const multiSiteResult = await this.scraperFactory.scrapeMultipleSites({
-        ...scraperOptions,
-        sites,
-        enableDuplicateDetection,
-        enableCompanyMatching: true, // Always enable for consistency
-      });
+      // Determine which sites to scrape
+      const sitesToScrape = sites || this.scraperRegistry.getEnabledSiteNames();
+      this.logger.log(`Scraping sites: ${sitesToScrape.join(', ')}`);
 
-      // Process the results
-      result.totalJobsFound = multiSiteResult.totalJobs;
-      result.duplicatesDetected = multiSiteResult.duplicatesFound;
-      result.companiesMatched = multiSiteResult.companiesMatched;
-      result.sitesScraped = Object.keys(multiSiteResult.siteResults);
-      result.siteResults = multiSiteResult.siteResults;
-      result.errors = multiSiteResult.errors;
+      // Scrape each site
+      for (const siteName of sitesToScrape) {
+        try {
+          this.logger.log(`Starting scrape for site: ${siteName}`);
+          
+          const scraper = this.scraperRegistry.getScraper(siteName);
+          if (!scraper) {
+            result.errors.push(`No scraper found for site: ${siteName}`);
+            continue;
+          }
 
-      // Process each site's jobs for database storage
-      for (const [siteName, siteResult] of Object.entries(multiSiteResult.siteResults)) {
-        if (siteResult.jobs && siteResult.jobs.length > 0) {
-          const processed = await this.processJobsFromSite(
-            siteResult.jobs,
-            siteName,
-            { enableAiExtraction, enableCompanyAnalysis, enableDuplicateDetection, force }
-          );
+          const siteResult = await scraper.scrapeJobs(scraperOptions);
+          result.siteResults[siteName] = siteResult;
+          result.totalJobsFound += siteResult.totalFound;
+          result.sitesScraped.push(siteName);
 
-          result.newVacancies += processed.newVacancies;
-          result.updatedVacancies += processed.updatedVacancies;
-          result.newCompanies += processed.newCompanies;
+          if (siteResult.errors.length > 0) {
+            result.errors.push(...siteResult.errors.map(error => `${siteName}: ${error}`));
+          }
+
+          this.logger.log(`Completed scrape for ${siteName}: ${siteResult.totalFound} jobs found`);
+
+          // Process jobs for database storage
+          if (siteResult.jobs.length > 0) {
+            const processed = await this.processJobsFromSite(
+              siteResult.jobs,
+              siteName,
+              { enableAiExtraction, enableCompanyAnalysis, force }
+            );
+
+            result.newVacancies += processed.newVacancies;
+            result.updatedVacancies += processed.updatedVacancies;
+            result.newCompanies += processed.newCompanies;
+          }
+
+        } catch (error) {
+          this.logger.error(`Failed to scrape ${siteName}:`, error);
+          result.errors.push(`${siteName}: ${error.message}`);
         }
       }
 
@@ -137,21 +138,18 @@ export class ScraperService {
 
     result.duration = Date.now() - startTime;
     
-    this.logger.log(`Enhanced scraping completed in ${result.duration}ms. ` +
+    this.logger.log(`Scraping completed in ${result.duration}ms. ` +
       `Found: ${result.totalJobsFound}, New: ${result.newVacancies}, ` +
-      `Updated: ${result.updatedVacancies}, Duplicates: ${result.duplicatesDetected}`);
+      `Updated: ${result.updatedVacancies}`);
 
     return result;
   }
 
   /**
-   * Scrape a specific site (for backwards compatibility)
+   * Scrape a specific site
    */
   async scrapeSite(siteName: string, options: EnhancedScrapingOptions = {}): Promise<EnhancedScrapingResult> {
-    return this.scrapeAllSites({
-      ...options,
-      sites: [siteName],
-    });
+    return this.scrapeAllSites({ ...options, sites: [siteName] });
   }
 
   /**
@@ -165,273 +163,133 @@ export class ScraperService {
    * Process jobs from a specific site
    */
   private async processJobsFromSite(
-    jobs: JobListing[], 
+    jobs: JobListing[],
     siteName: string,
     options: {
-      enableAiExtraction: boolean;
-      enableCompanyAnalysis: boolean;
-      enableDuplicateDetection: boolean;
-      force: boolean;
+      enableAiExtraction?: boolean;
+      enableCompanyAnalysis?: boolean;
+      force?: boolean;
     }
   ): Promise<{
     newVacancies: number;
     updatedVacancies: number;
     newCompanies: number;
   }> {
+    const { enableCompanyAnalysis } = options;
+
+    let processed = 0;
     let newVacancies = 0;
     let updatedVacancies = 0;
-    let newCompanies = 0;
+    const newCompanies = 0;
 
-    for (const jobListing of jobs) {
+    for (const job of jobs) {
       try {
-        // Find or create company with intelligent matching
-        const companyResult = await this.companyMatcher.findOrCreateCompany({
-          name: jobListing.company,
-          website: jobListing.companyWebsite,
-          location: jobListing.location,
-          industry: jobListing.industry,
+        // Basic company handling
+        let companyId: string | null = null;
+        if (enableCompanyAnalysis && job.company) {
+          // Use findOrCreate method from CompanyService
+          const company = await this.companyService.findOrCreate({
+            name: job.company,
+            website: job.companyWebsite || null,
+            location: job.location,
+          });
+          companyId = company.id;
+          // Note: we can't easily track if it's new without checking the result
+        }
+
+        // Check if vacancy already exists by URL
+        const existingVacancy = await this.prisma.vacancy.findFirst({
+          where: { sourceUrl: job.url }
         });
-
-        if (companyResult.isNew) {
-          newCompanies++;
-        }
-
-        // Handle duplicate detection if enabled
-        let vacancyId: string | null = null;
-        let isNewVacancy = true;
-
-        if (options.enableDuplicateDetection) {
-          // Check for exact matches first
-          const exactMatchId = await this.duplicateDetector.findExactMatch(jobListing);
-          
-          if (exactMatchId) {
-            // Update existing vacancy
-            await this.duplicateDetector.mergeJobListings(exactMatchId, jobListing);
-            vacancyId = exactMatchId;
-            isNewVacancy = false;
-            updatedVacancies++;
-          } else {
-            // Check for fuzzy matches
-            const duplicates = await this.duplicateDetector.findDuplicates(jobListing);
-            const bestMatch = duplicates.find(d => d.shouldMerge);
-            
-            if (bestMatch) {
-              await this.duplicateDetector.mergeJobListings(bestMatch.existingId, jobListing);
-              vacancyId = bestMatch.existingId;
-              isNewVacancy = false;
-              updatedVacancies++;
+        
+        if (existingVacancy) {
+          // Update existing vacancy
+          await this.prisma.vacancy.update({
+            where: { id: existingVacancy.id },
+            data: {
+              title: job.title,
+              description: job.description,
+              requirements: job.requirements,
+              benefits: job.benefits,
+              location: job.location,
+              experienceLevel: job.experienceLevel,
+              employmentType: job.employmentType,
+              technologies: job.technologies,
+              companyId,
+              updatedAt: new Date(),
             }
-          }
-        }
-
-        // Create new vacancy if not a duplicate
-        if (isNewVacancy) {
-          const vacancyData = this.convertJobListingToVacancyData(jobListing, companyResult.id);
-          const newVacancy = await this.vacancyService.create(vacancyData);
-          vacancyId = (newVacancy as any).data?.id || (newVacancy as any).id;
+          });
+          updatedVacancies++;
+        } else {
+          // Create new vacancy
+          await this.vacancyService.create({
+            title: job.title,
+            description: job.description,
+            requirements: job.requirements,
+            benefits: job.benefits,
+            sourceUrl: job.url,
+            sourceSite: siteName,
+            location: job.location,
+            experienceLevel: job.experienceLevel,
+            employmentType: job.employmentType,
+            technologies: job.technologies || [],
+            companyId,
+            status: 'active',
+          });
           newVacancies++;
         }
 
-        // Queue AI extraction if enabled and we have content
-        if (options.enableAiExtraction && vacancyId && jobListing.url) {
-          try {
-            const scraper = this.scraperFactory.getScraperForUrl(jobListing.url);
-            if (scraper) {
-              const jobDetails = await scraper.fetchJobDetails(jobListing.url, jobListing.company);
-              if (jobDetails.rawHtml) {
-                await this.queueAiExtraction(vacancyId, jobDetails.rawHtml, jobListing.url);
-              }
-            }
-          } catch (error) {
-            this.logger.warn(`Failed to fetch job details for AI extraction: ${error.message}`);
-          }
-        }
+        processed++;
 
-        // Queue company analysis if enabled
-        if (options.enableCompanyAnalysis && jobListing.companyWebsite) {
-          await this.queueCompanyAnalysis(companyResult.id, siteName, jobListing.companyWebsite);
+        if (processed % 10 === 0) {
+          this.logger.debug(`Processed ${processed}/${jobs.length} jobs from ${siteName}`);
         }
 
       } catch (error) {
-        this.logger.error(`Error processing job listing: ${jobListing.title}`, error);
+        this.logger.error(`Failed to process job "${job.title}" from ${siteName}:`, error);
       }
     }
 
-    return { newVacancies, updatedVacancies, newCompanies };
-  }
-
-  private convertJobListingToVacancyData(job: JobListing, companyId: string): any {
-    // Parse salary information if available
-    let salaryMin: number | undefined;
-    let salaryMax: number | undefined;
-    let currency: string | undefined;
-
-    if (job.salaryRange) {
-      const salaryInfo = this.parseSalaryRange(job.salaryRange);
-      if (salaryInfo) {
-        salaryMin = salaryInfo.min;
-        salaryMax = salaryInfo.max;
-        currency = salaryInfo.currency;
-      }
-    }
+    this.logger.log(`Processed ${processed} jobs from ${siteName}: ${newVacancies} new, ${updatedVacancies} updated, ${newCompanies} new companies`);
 
     return {
-      title: job.title,
-      description: job.description || '',
-      requirements: job.requirements ? [job.requirements] : [],
-      responsibilities: job.responsibilities || [],
-      location: job.location,
-      salaryMin,
-      salaryMax,
-      currency,
-      experienceLevel: job.experienceLevel || 'not_specified',
-      employmentType: job.employmentType || 'full-time',
-      workModel: job.workModel || 'not_specified',
-      companyId,
-      sourceUrl: job.url,
-      sourceSite: job.sourceSite,
-      originalJobId: job.originalJobId,
-      status: 'active',
-      postedAt: job.postedDate,
-      technologies: job.technologies,
-      benefits: job.benefits,
-      industry: job.industry,
-      // Cross-site tracking fields
-      externalIds: job.originalJobId && job.sourceSite ? {
-        [job.sourceSite]: job.originalJobId
-      } : null,
-      scrapedSites: {
-        [job.sourceSite]: {
-          lastSeenAt: new Date().toISOString(),
-          url: job.url,
-          originalId: job.originalJobId,
-        }
-      },
+      newVacancies,
+      updatedVacancies,
+      newCompanies,
     };
   }
 
-  private parseSalaryRange(salaryRange: string): { min?: number; max?: number; currency?: string } | null {
-    if (!salaryRange) return null;
-    
-    // Simple regex to extract salary range
-    const match = salaryRange.match(/(\d+[\d,\s]*)\s*[-–]\s*(\d+[\d,\s]*)\s*([A-Z]{3}|лв|лева)?/);
-    if (match) {
-      return {
-        min: parseInt(match[1].replace(/[\s,]/g, ''), 10),
-        max: parseInt(match[2].replace(/[\s,]/g, ''), 10),
-        currency: match[3]?.includes('лв') ? 'BGN' : match[3] || 'BGN',
-      };
-    }
-    
-    return null;
-  }
-
-  private async queueAiExtraction(vacancyId: string, content: string, sourceUrl: string): Promise<void> {
-    try {
-      const crypto = await import('crypto');
-      const contentHash = crypto.createHash('sha256').update(content).digest('hex');
-
-      const aiExtractionData = {
-        vacancyId,
-        contentHash,
-        content,
-        sourceUrl,
-        priority: 5,
-        maxRetries: 2,
-      };
-
-      await this.scraperQueue.add('ai-extraction', aiExtractionData, {
-        priority: 5,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 2000 },
-        removeOnComplete: 10,
-        removeOnFail: 5,
-      });
-
-      this.logger.debug(`Queued AI extraction for vacancy ${vacancyId}`);
-    } catch (error) {
-      this.logger.error(`Failed to queue AI extraction: ${error.message}`);
-    }
-  }
-
-  private async queueCompanyAnalysis(companyId: string, sourceSite: string, sourceUrl: string): Promise<void> {
-    try {
-      const companyAnalysisData = {
-        companyId,
-        sourceSite,
-        sourceUrl,
-        analysisType: 'website' as const,
-        priority: 3,
-        maxRetries: 2,
-      };
-
-      await this.scraperQueue.add('company-analysis', companyAnalysisData, {
-        priority: 3,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 5000 },
-        removeOnComplete: 10,
-        removeOnFail: 5,
-      });
-
-      this.logger.debug(`Queued company analysis for company ${companyId}`);
-    } catch (error) {
-      this.logger.error(`Failed to queue company analysis: ${error.message}`);
-    }
-  }
-
   /**
-   * Get enhanced scraping statistics
+   * Get scraping statistics
    */
-  async getScrapingStats(): Promise<ScrapingStats> {
-    const [
-      totalVacancies,
-      activeVacancies,
-      totalCompanies,
-      lastScrapedVacancy
-    ] = await Promise.all([
-      this.prisma.vacancy.count(),
-      this.prisma.vacancy.count({ where: { status: 'active' } }),
-      this.prisma.company.count(),
-      this.prisma.vacancy.findFirst({
-        orderBy: { createdAt: 'desc' },
-        select: { createdAt: true },
-      }),
-    ]);
+  async getStats(): Promise<ScrapingStats> {
+    const totalVacancies = await this.prisma.vacancy.count();
+    const activeVacancies = await this.prisma.vacancy.count({
+      where: { status: 'active' }
+    });
+    const totalCompanies = await this.prisma.company.count();
 
-    // Get counts by source site
-    const siteCountsRaw = await this.prisma.vacancy.groupBy({
+    const siteCounts = await this.prisma.vacancy.groupBy({
       by: ['sourceSite'],
-      _count: { id: true },
-      where: { sourceSite: { not: null } },
+      _count: { sourceSite: true },
     });
 
-    const siteCounts: Record<string, number> = {};
-    for (const item of siteCountsRaw) {
-      if (item.sourceSite) {
-        siteCounts[item.sourceSite] = item._count.id;
-      }
-    }
+    const lastScraped = await this.prisma.vacancy.findFirst({
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
 
     return {
       totalVacancies,
       activeVacancies,
       totalCompanies,
-      siteCounts,
-      lastScrapedAt: lastScrapedVacancy?.createdAt?.toISOString() || null,
+      siteCounts: siteCounts.reduce((acc, item) => {
+        if (item.sourceSite) {
+          acc[item.sourceSite] = item._count.sourceSite;
+        }
+        return acc;
+      }, {} as Record<string, number>),
+      lastScrapedAt: lastScraped?.createdAt?.toISOString() || null,
     };
-  }
-
-  /**
-   * Get available scrapers information
-   */
-  getAvailableScrapers(): Record<string, any> {
-    return this.scraperFactory.getAvailableScrapers();
-  }
-
-  /**
-   * Get scraper factory statistics
-   */
-  getScraperStats(): any {
-    return this.scraperFactory.getStats();
   }
 }
